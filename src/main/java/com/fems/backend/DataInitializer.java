@@ -74,16 +74,19 @@ public class DataInitializer implements CommandLineRunner {
 
             Client client = new Client();
             client.setUser(cUser);
-            client.setAddress("123 Client St, City");
-            client.setLatitude(12.34);
-            client.setLongitude(56.78);
+            client.setAddress("White Town, Puducherry");
+            client.setLatitude(11.9369);
+            client.setLongitude(79.8340);
             clientRepository.save(client);
             System.out.println("✅ SAMPLE CLIENT CREATED: client@fems.com / client123");
         }
 
-        createSampleClient("Global Tech Solutions", "contact@globaltech.com", "Tech Park, Building 4", 12.97, 77.59);
-        createSampleClient("Apex Logistics Hub", "ops@apexlogistics.com", "Logistic Yard 14, Port Dr", 13.08, 80.27);
-        createSampleClient("Future Retail Corp", "info@futureretail.com", "Downtown Plaza, Floor 2", 19.07, 72.87);
+        createSampleClient("Lawspet Logistics", "lawspet@fems.com", "Lawspet Main Rd, Puducherry", 11.9580, 79.8083);
+        createSampleClient("Reddiarpalayam Hub", "red@fems.com", "Reddiarpalayam, Puducherry", 11.9252, 79.8000);
+        createSampleClient("Muthialpet Site", "muthial@fems.com", "Muthialpet, Puducherry", 11.9485, 79.8250);
+        createSampleClient("Villianur Center", "vill@fems.com", "Villianur, Puducherry", 11.9035, 79.7615);
+        createSampleClient("Ariyankuppam Station", "ariya@fems.com", "Ariyankuppam, Puducherry", 11.8830, 79.8170);
+        createSampleClient("Mudaliarpet Depot", "mudaliar@fems.com", "Mudaliarpet, Puducherry", 11.9160, 79.8200);
     }
 
     private void createSampleClient(String name, String email, String address, double lat, double lon) {

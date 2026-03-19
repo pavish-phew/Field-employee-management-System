@@ -12,10 +12,11 @@ const TaskCard = ({ task, onAction, distance }) => {
     CANCELLED: "bg-rose-500/10 text-rose-500 border-rose-500/20",
   };
 
-  const isTooFar = distance !== null && distance > 500;
+  const isTooFar = distance !== null && distance > 5000;
 
   const getStatusButton = () => {
     if (task.status === 'PENDING') {
+      const distKm = distance !== null ? (distance / 1000).toFixed(2) : null;
       return (
         <div className="flex flex-col gap-2">
           <button 
@@ -31,7 +32,7 @@ const TaskCard = ({ task, onAction, distance }) => {
           </button>
           {distance !== null && (
             <p className={`text-[10px] text-center font-bold uppercase tracking-wider ${isTooFar ? 'text-rose-500' : 'text-emerald-500'}`}>
-              {isTooFar ? `Too far: ${Math.round(distance)}m away` : `In range: ${Math.round(distance)}m away`}
+              {isTooFar ? `Outside Range: ${distKm}km away` : `Target in Sight: ${distKm}km away`}
             </p>
           )}
         </div>

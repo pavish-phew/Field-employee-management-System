@@ -63,8 +63,10 @@ export const employeeApi = {
   updateLocation: (userId, lat, lon) => api.post('/api/employee/location/update', { latitude: lat, longitude: lon })
 };
 
-// Client API (Backwards Compatibility)
+// Client API
 export const clientApi = {
+  getMyTasks: () => api.get('/api/tasks/client/me'),
+  updateTaskStatus: (taskId, status) => api.put(`/api/tasks/${taskId}/status?status=${status}`),
   getClientTasks: (clientId) => api.get(`/api/tasks/client/${clientId}`)
 };
 

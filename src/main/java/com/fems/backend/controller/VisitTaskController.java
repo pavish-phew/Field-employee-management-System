@@ -58,8 +58,16 @@ public class VisitTaskController {
         return ResponseEntity.ok(visitTaskService.getTasksByClient(clientId));
     }
 
+    @GetMapping("/client/me")
+    @PreAuthorize("hasRole('CLIENT')")
+    public ResponseEntity<List<TaskResponse>> getMyClientTasks() {
+        UserDetails userDetails = (UserDetails) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        User user = userRepository.findByEmail(userDetails.getUsername()).orElseThrow();
+        return ResponseEntity.ok(visitTaskService.getTasksByClientUserId(user.getId()));
+    }
+
     @PutMapping("/{id}/status")
-    @PreAuthorize("hasAnyRole('EMPLOYEE', 'ADMIN')") // Allow Admin too for manual fixes
+    @PreAuthorize("hasAnyRole('EMPLOYEE', 'ADMIN', 'CLIENT')") // Allow Admin too for manual fixes
     public ResponseEntity<Void> updateTaskStatus(
             @PathVariable(name = "id") Long id, 
             @RequestParam(name = "status") VisitTaskStatus status,

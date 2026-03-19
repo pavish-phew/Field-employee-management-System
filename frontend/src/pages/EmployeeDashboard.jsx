@@ -1,11 +1,22 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Play, StopCircle, Clock, MapPin, 
-  CheckCircle2, AlertCircle, History, LayoutDashboard 
+  CheckCircle2, AlertCircle, History, LayoutDashboard, Navigation
 } from 'lucide-react';
 import { employeeApi, attendanceApi } from '../services/api';
 import TaskCard from '../components/TaskCard';
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet-routing-machine';
+
+// Fix for Leaflet marker icons
+import markerIcon from 'leaflet/dist/images/marker-icon.png';
+import markerShadow from 'leaflet/dist/images/marker-shadow.png';
+let DefaultIcon = L.icon({ iconUrl: markerIcon, shadowUrl: markerShadow, iconSize: [25, 41], iconAnchor: [12, 41] });
+L.Marker.prototype.options.icon = DefaultIcon;
+
+import RoutingMachine from '../components/RoutingMachine';
 
 const EmployeeDashboard = ({ user }) => {
   const [tasks, setTasks] = useState([]);
@@ -237,6 +248,49 @@ const EmployeeDashboard = ({ user }) => {
                <h3 className="text-2xl font-bold flex items-center gap-3"><LayoutDashboard className="text-indigo-400" /> Active Assignments</h3>
                <span className="bg-indigo-500/10 text-indigo-400 px-3 py-1 rounded-full text-xs font-bold border border-indigo-500/20">{tasks.length} total</span>
             </div>
+
+            {/* Active Navigation Map */}
+            {(() => {
+              const activeTask = tasks.find(t => t.status === 'IN_PROGRESS' && t.clientLatitude);
+              if (!activeTask) return null;
+
+              return (
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
+                  <div className="bg-indigo-600/10 border border-indigo-500/20 rounded-[2.5rem] p-6 flex flex-col md:flex-row gap-8 items-center overflow-hidden">
+                    <div className="flex-1 w-full text-center md:text-left">
+                      <div className="flex items-center justify-center md:justify-start gap-3 mb-2">
+                        <Navigation className="text-indigo-400 animate-pulse" size={20} />
+                        <span className="text-xs font-bold text-indigo-400 uppercase tracking-widest">Active Navigation</span>
+                      </div>
+                      <h3 className="text-2xl font-bold text-white mb-2 underline decoration-indigo-500/30 underline-offset-8">Heading to Site</h3>
+                      <p className="text-slate-400 text-sm italic font-medium">Route: Current Position → {activeTask.clientName}</p>
+                    </div>
+                    
+                    {currentPosition && (
+                      <div className="w-full md:w-2/3 h-[250px] rounded-3xl overflow-hidden border border-slate-800 shadow-2xl relative z-10">
+                        <MapContainer 
+                          center={[currentPosition.lat, currentPosition.lon]} 
+                          zoom={14} 
+                          className="h-full w-full"
+                          zoomControl={false}
+                        >
+                          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                          <RoutingMachine from={[currentPosition.lat, currentPosition.lon]} to={[activeTask.clientLatitude, activeTask.clientLongitude]} />
+                          
+                          <Marker position={[activeTask.clientLatitude, activeTask.clientLongitude]} icon={L.divIcon({ html: '<div style="background:#ef4444;width:12px;height:12px;border-radius:50%;border:2px solid white;box-shadow:0 0 10px #ef4444;"></div>', iconSize:[12,12], iconAnchor:[6,6] })}>
+                            <Popup>{activeTask.clientName}</Popup>
+                          </Marker>
+                          
+                          <Marker position={[currentPosition.lat, currentPosition.lon]}>
+                            <Popup>Your current location</Popup>
+                          </Marker>
+                        </MapContainer>
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              );
+            })()}
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <AnimatePresence>

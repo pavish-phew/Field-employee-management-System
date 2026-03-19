@@ -52,9 +52,13 @@ const AdminDashboard = () => {
 
   // Static Client Data fallback
   const staticClients = [
-    { id: 'c1', name: 'Global Tech Solutions', latitude: 11.935, longitude: 79.815 },
-    { id: 'c2', name: 'Apex Logistics Hub', latitude: 11.950, longitude: 79.800 },
-    { id: 'c3', name: 'Future Retail Corp', latitude: 11.945, longitude: 79.820 },
+    { id: 'c1', name: "White Town HQ", latitude: 11.9369, longitude: 79.8340 },
+    { id: 'c2', name: "Lawspet Logistics", latitude: 11.9580, longitude: 79.8083 },
+    { id: 'c3', name: "Reddiarpalayam Hub", latitude: 11.9252, longitude: 79.8000 },
+    { id: 'c4', name: "Muthialpet Site", latitude: 11.9485, longitude: 79.8250 },
+    { id: 'c5', name: "Villianur Center", latitude: 11.9035, longitude: 79.7615 },
+    { id: 'c6', name: "Ariyankuppam Station", latitude: 11.8830, longitude: 79.8170 },
+    { id: 'c7', name: "Mudaliarpet Depot", latitude: 11.9160, longitude: 79.8200 }
   ];
 
   // Helper to check if any employee is near this client
@@ -71,7 +75,7 @@ const AdminDashboard = () => {
                 Math.cos(loc.latitude * Math.PI / 180) * Math.cos(cLat * Math.PI / 180) * 
                 Math.sin(dLon/2) * Math.sin(dLon/2);
       const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      return R * c <= 0.5; // Within 500m
+      return R * c <= 5.0; // Within 5km
     });
   };
 
@@ -303,11 +307,22 @@ const AdminDashboard = () => {
                       </div>
                     </Popup>
                   </Marker>
-                  <Circle center={[loc.latitude, loc.longitude]} radius={500} pathOptions={{ color: '#6366f1', fillColor: '#6366f1', fillOpacity: 0.1 }} />
+                  <Circle center={[loc.latitude, loc.longitude]} radius={5000} pathOptions={{ color: '#6366f1', fillColor: '#6366f1', fillOpacity: 0.05, weight: 1 }} />
                 </React.Fragment>
               ))}
 
-              {clients.concat(staticClients).map(client => (
+              {clients.concat(staticClients)
+                .filter(client => {
+                  if (!client.latitude) return false;
+                  const R = 6371;
+                  const dLat = (client.latitude - 11.9416) * Math.PI / 180;
+                  const dLon = (client.longitude - 79.8083) * Math.PI / 180;
+                  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                            Math.cos(11.9416 * Math.PI / 180) * Math.cos(client.latitude * Math.PI / 180) * 
+                            Math.sin(dLon/2) * Math.sin(dLon/2);
+                  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)) <= 50; // 50km range
+                })
+                .map(client => (
                 <Marker key={client.id} position={[client.latitude, client.longitude]} icon={getClientIcon(client)}>
                   <Popup>
                     <div className="p-1">
