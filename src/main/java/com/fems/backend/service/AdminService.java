@@ -45,9 +45,19 @@ public class AdminService {
 
     @Transactional
     public void createClient(CreateClientRequest request) {
+        if (userRepository.existsByEmail(request.getEmail())) {
+            throw new RuntimeException("Email already exists");
+        }
+
+        User user = new User();
+        user.setName(request.getName());
+        user.setEmail(request.getEmail());
+        user.setPassword(passwordEncoder.encode(request.getPassword()));
+        user.setRole("CLIENT");
+        user = userRepository.save(user);
+
         Client client = new Client();
-        client.setName(request.getName());
-        client.setEmail(request.getEmail());
+        client.setUser(user);
         client.setAddress(request.getAddress());
         client.setLatitude(request.getLatitude());
         client.setLongitude(request.getLongitude());

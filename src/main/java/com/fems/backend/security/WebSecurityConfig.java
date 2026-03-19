@@ -61,9 +61,16 @@ public class WebSecurityConfig {
             .csrf(AbstractHttpConfigurer::disable)
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> 
-                auth.requestMatchers("/auth/**").permitAll()
-                    .anyRequest().authenticated()
-            );
+    auth
+        // Public endpoints
+        .requestMatchers("/auth/**").permitAll()
+
+        // 🔥 Protect ONLY backend APIs
+        .requestMatchers("/api/**", "/attendance/**", "/admin/**").authenticated()
+
+        // 🔥 Allow everything else (React routes)
+        .anyRequest().permitAll()
+);
 
         http.authenticationProvider(authenticationProvider());
         http.addFilterBefore(authTokenFilter, UsernamePasswordAuthenticationFilter.class);

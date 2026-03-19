@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -37,7 +38,14 @@ public class VisitTaskController {
     public ResponseEntity<List<TaskResponse>> getMyTasks() {
         UserDetails userDetails = (UserDetails) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         User user = userRepository.findByEmail(userDetails.getUsername()).orElseThrow();
-        return ResponseEntity.ok(visitTaskService.getTasksByEmployeeUserId(user.getId()));
+        
+        if (user.getRole().equals("ADMIN")) {
+            return ResponseEntity.ok(visitTaskService.getAllTasks());
+        } else if (user.getRole().equals("CLIENT")) {
+            return ResponseEntity.ok(visitTaskService.getTasksByClientUserId(user.getId()));
+        } else {
+            return ResponseEntity.ok(visitTaskService.getTasksByEmployeeUserId(user.getId()));
+        }
     }
 
     @GetMapping("/employee/{employeeId}")
@@ -51,6 +59,7 @@ public class VisitTaskController {
     }
 
     @PutMapping("/{id}/status")
+    @PreAuthorize("hasAnyRole('EMPLOYEE', 'CLIENT')")
     public ResponseEntity<Void> updateTaskStatus(@PathVariable(name = "id") Long id, @RequestParam(name = "status") VisitTaskStatus status) {
         visitTaskService.updateTaskStatus(id, status);
         return ResponseEntity.ok().build();

@@ -23,6 +23,10 @@ public class EmployeeService {
         Employee emp = employeeRepository.findByUserId(userId)
                 .orElseThrow(() -> new RuntimeException("Employee not found for user id: " + userId));
         
+        if (attendanceRepository.findFirstByEmployeeIdAndClockOutTimeIsNullOrderByClockInTimeDesc(emp.getId()).isPresent()) {
+            throw new RuntimeException("Shift already in progress");
+        }
+
         Attendance att = Attendance.builder()
                 .employee(emp)
                 .clockInTime(LocalDateTime.now())
@@ -48,6 +52,14 @@ public class EmployeeService {
         Employee emp = employeeRepository.findByUserId(userId)
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
         return attendanceRepository.findByEmployeeId(emp.getId());
+    }
+
+    public List<Attendance> getAllAttendance() {
+        return attendanceRepository.findAll();
+    }
+
+    public List<Attendance> getActiveLocations() {
+        return attendanceRepository.findByClockOutTimeIsNull();
     }
 }
 

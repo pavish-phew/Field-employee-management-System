@@ -33,13 +33,17 @@ public class AuthTokenFilter extends OncePerRequestFilter {
             String jwt = parseJwt(request);
             if (jwt != null && jwtUtils.validateJwtToken(jwt)) {
                 String username = jwtUtils.getUserNameFromJwtToken(jwt);
+                String role = jwtUtils.getRoleFromJwtToken(jwt); // Still use role from JWT for verification or debug
 
                 UserDetails userDetails = userDetailsService.loadUserByUsername(username);
                 UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
                         userDetails, null, userDetails.getAuthorities());
                 authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
 
+                System.out.println(">>> AUTHENTICATED via JWT: " + username + " with role: " + role);
                 SecurityContextHolder.getContext().setAuthentication(authentication);
+            } else {
+                System.out.println(">>> NO VALID JWT FOUND in request to: " + request.getRequestURI());
             }
         } catch (Exception e) {
             logger.error("Cannot set user authentication: {}", e.getMessage());

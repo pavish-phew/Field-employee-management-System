@@ -1,122 +1,225 @@
 import React, { useState, useEffect } from 'react';
-import { employeeApi } from '../services/api';
-import { Clock, MapPin, Activity, ListChecks, CheckCircle, Package } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { 
+  Play, StopCircle, Clock, MapPin, 
+  CheckCircle2, AlertCircle, History, LayoutDashboard 
+} from 'lucide-react';
+import { employeeApi, attendanceApi } from '../services/api';
 import TaskCard from '../components/TaskCard';
 
 const EmployeeDashboard = ({ user }) => {
   const [tasks, setTasks] = useState([]);
-  const [isWorking, setIsWorking] = useState(false);
-  const [location, setLocation] = useState(null);
-  const [lastUpdate, setLastUpdate] = useState(null);
+  const [history, setHistory] = useState([]);
+  const [isClockedIn, setIsClockedIn] = useState(false);
+  const [activeShift, setActiveShift] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [currentTime, setCurrentTime] = useState(new Date());
 
   useEffect(() => {
-    loadTasks();
-    const interval = setInterval(() => {
-      if (isWorking) updateLiveLocation();
-    }, 60000); // Every minute
-    return () => clearInterval(interval);
-  }, [isWorking]);
+    loadData();
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
-  const loadTasks = async () => {
+  const loadData = async () => {
+    setLoading(true);
     try {
-      const resp = await employeeApi.getMyTasks(user.id);
-      setTasks(resp.data);
-    } catch (e) {
-      console.error('Error fetching employee tasks', e);
-    }
-  };
-
-  const updateLiveLocation = () => {
-    navigator.geolocation.getCurrentPosition(position => {
-      const { latitude, longitude } = position.coords;
-      employeeApi.updateLocation(user.id, latitude, longitude);
-      setLastUpdate(new Date().toLocaleTimeString());
-    }, err => console.error('GPS error', err));
-  };
-
-  const handleClockToggle = () => {
-    navigator.geolocation.getCurrentPosition(async position => {
-      const { latitude, longitude } = position.coords;
-      if (!isWorking) {
-        await employeeApi.clockIn(user.id, latitude, longitude);
-        setIsWorking(true);
-        setLocation({ lat: latitude, lon: longitude });
-      } else {
-        await employeeApi.clockOut(user.id, latitude, longitude);
-        setIsWorking(false);
-        setLocation(null);
+      const tResp = await employeeApi.getMyTasks();
+      setTasks(tResp.data);
+      
+      const hResp = await attendanceApi.getHistory();
+      setHistory(hResp.data);
+      
+      const active = hResp.data.find(a => !a.clockOutTime);
+      if (active) {
+        setIsClockedIn(true);
+        setActiveShift(active);
       }
-    }, err => alert('GPS access required for attendance'));
+    } catch (e) {
+      console.error('Error loading employee data', e);
+      setError('Failed to sync workspace');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleTaskAction = async (taskId) => {
-    const task = tasks.find(t => t.id === taskId);
-    if (task.status === 'PENDING') {
-      await employeeApi.startTask(taskId);
-    } else {
-      await employeeApi.completeTask(taskId);
+  const handleClockIn = async () => {
+    setLoading(true);
+    setError(null);
+    if (!navigator.geolocation) {
+      setError('Geolocation not supported by browser');
+      setLoading(false);
+      return;
     }
-    loadTasks();
+
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          await attendanceApi.clockIn(pos.coords.latitude, pos.coords.longitude);
+          setIsClockedIn(true);
+          loadData();
+        } catch (e) {
+          setError('Network error: Could not signal shift start');
+        } finally {
+          setLoading(false);
+        }
+      },
+      (err) => {
+        setError('Location permission denied. Mandatory for field work.');
+        setLoading(false);
+      }
+    );
+  };
+
+  const handleClockOut = async () => {
+    setLoading(true);
+    try {
+      await attendanceApi.clockOut();
+      setIsClockedIn(false);
+      setActiveShift(null);
+      loadData();
+    } catch (e) {
+      setError('Failed to record shift end');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleStartTask = async (id) => {
+    await employeeApi.startTask(id);
+    loadData();
+  };
+
+  const handleCompleteTask = async (id) => {
+    await employeeApi.completeTask(id);
+    loadData();
   };
 
   return (
-    <div className="employee-dash tab-pane">
-      <header className="pane-header">
-        <h1>Field Agent Dashboard</h1>
-        <p className="subtitle">Execute field operations efficiently</p>
-      </header>
-      
-      <div className="dashboard-grid">
-        <section className="card card-filled attendance-section">
-          <div className="section-header">
-            <Clock size={22} className="icon-primary" />
-            <h3>Attendance Control</h3>
-          </div>
-          
-          <div className={`status-display card glass ${isWorking ? 'status-active' : 'status-inactive'}`}>
-            <div className="status-indicator"></div>
-            <span>
-              {isWorking ? 'Currently On Shift' : 'Off Shift • Clock In to Start'}
-            </span>
-          </div>
-
-          <button 
-            onClick={handleClockToggle} 
-            className={`btn btn-block btn-lg ${isWorking ? 'btn-danger' : 'btn-primary'}`}
-          >
-            <Activity size={20} />
-            <span>{isWorking ? 'Stop Work Shift' : 'Start Work Shift'}</span>
-          </button>
-
-          {isWorking && (
-            <div className="location-pill glass mt-3">
-              <MapPin size={14} className="icon-primary" />
-              <span>Auto-Tracking Enabled • Last update: {lastUpdate || 'Waiting...'}</span>
+    <div className="space-y-8 animate-fadeIn">
+      {/* Shift Control Header */}
+      <section className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 relative overflow-hidden shadow-2xl">
+         <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-600/10 blur-[80px] -z-10"></div>
+         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+            <div className="space-y-4">
+               <div className="flex items-center gap-3">
+                  <div className={`w-3 h-3 rounded-full ${isClockedIn ? 'bg-emerald-500 animate-pulse' : 'bg-slate-700'}`}></div>
+                  <span className="text-xs font-bold uppercase tracking-widest text-slate-500">{isClockedIn ? 'On Duty' : 'Off Duty'}</span>
+               </div>
+               <h2 className="text-4xl font-extrabold tracking-tight">Shift Control <span className="text-indigo-500 text-5xl">.</span></h2>
+               <div className="flex items-center gap-6 text-slate-400">
+                  <div className="flex flex-col">
+                    <span className="text-xs uppercase font-bold text-slate-600">Local Time</span>
+                    <span className="text-xl font-mono text-slate-200">{currentTime.toLocaleTimeString()}</span>
+                  </div>
+                  {isClockedIn && activeShift && (
+                    <div className="flex flex-col border-l border-slate-800 pl-6">
+                      <span className="text-xs uppercase font-bold text-slate-600">Working Since</span>
+                      <span className="text-xl font-mono text-emerald-400">
+                        {activeShift.clockInTime ? new Date(activeShift.clockInTime).toLocaleTimeString() : '...'}
+                      </span>
+                    </div>
+                  )}
+               </div>
+               {error && (
+                 <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="flex items-center gap-2 p-3 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-xl text-sm italic">
+                    <AlertCircle size={16} /> {error}
+                 </motion.div>
+               )}
             </div>
-          )}
-        </section>
 
-        <section className="span-2">
-          <div className="section-header">
-            <ListChecks size={22} className="icon-primary" />
-            <h3>My Field Assignments</h3>
-          </div>
-          <div className="tasks-grid">
-            {tasks.length > 0 ? tasks.map(t => (
-              <TaskCard 
-                key={t.id} 
-                task={t} 
-                onAction={handleTaskAction}
-                actionLabel={t.status === 'PENDING' ? 'Start Task' : 'Finalize Task'}
-              />
-            )) : (
-              <div className="empty-state">
-                <Package size={48} className="icon-subtle mb-3" />
-                <p>No tasks assigned to you right now.</p>
-              </div>
-            )}
-          </div>
-        </section>
+            <div className="flex flex-col gap-4">
+               {isClockedIn ? (
+                 <button 
+                   onClick={handleClockOut}
+                   disabled={loading}
+                   className="group bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white p-1 rounded-2xl flex items-center shadow-lg shadow-rose-900/20 transition-all active:scale-95 overflow-hidden"
+                 >
+                    <div className="w-16 h-16 bg-white/10 flex items-center justify-center rounded-xl group-hover:scale-110 transition-transform">
+                       <StopCircle size={28} />
+                    </div>
+                    <div className="flex-1 px-6 text-left">
+                       <p className="font-bold text-lg">Stop Work Shift</p>
+                       <p className="text-xs text-rose-100 opacity-70 italic font-medium">Record final status</p>
+                    </div>
+                 </button>
+               ) : (
+                 <button 
+                    onClick={handleClockIn}
+                    disabled={loading}
+                    className="group bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white p-1 rounded-2xl flex items-center shadow-lg shadow-indigo-900/20 transition-all active:scale-95 overflow-hidden"
+                 >
+                    <div className="w-16 h-16 bg-white/10 flex items-center justify-center rounded-xl group-hover:scale-110 transition-transform">
+                       <Play size={28} fill="currentColor" />
+                    </div>
+                    <div className="flex-1 px-6 text-left">
+                       <p className="font-bold text-lg">Start Work Shift</p>
+                       <p className="text-xs text-indigo-100 opacity-70 italic font-medium">Auto-captures location</p>
+                    </div>
+                 </button>
+               )}
+            </div>
+         </div>
+      </section>
+
+      {/* Workspace Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+         <main className="lg:col-span-2 space-y-6">
+            <div className="flex items-center justify-between">
+               <h3 className="text-2xl font-bold flex items-center gap-3"><LayoutDashboard className="text-indigo-400" /> Active Assignments</h3>
+               <span className="bg-indigo-500/10 text-indigo-400 px-3 py-1 rounded-full text-xs font-bold border border-indigo-500/20">{tasks.length} total</span>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <AnimatePresence>
+                {tasks.map((task, idx) => (
+                  <motion.div key={task.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.1 }}>
+                    <TaskCard 
+                      task={task} 
+                      onAction={task.status === 'PENDING' ? handleStartTask : (task.status === 'IN_PROGRESS' ? handleCompleteTask : null)} 
+                    />
+                  </motion.div>
+                ))}
+                {tasks.length === 0 && (
+                   <div className="col-span-2 py-24 border-2 border-dashed border-slate-800 rounded-3xl flex flex-col items-center justify-center text-slate-500 gap-3">
+                      <CheckCircle2 size={48} className="opacity-10" />
+                      <p className="font-medium italic">No field tasks assigned at the moment.</p>
+                   </div>
+                )}
+              </AnimatePresence>
+            </div>
+         </main>
+
+         <aside className="space-y-6 lg:border-l lg:border-slate-800 lg:pl-8">
+            <div className="flex items-center justify-between">
+               <h3 className="text-xl font-bold flex items-center gap-3"><History className="text-indigo-400" /> Recent Shifts</h3>
+            </div>
+            <div className="space-y-4">
+               {history.slice(0, 5).map((shift) => (
+                  <div key={shift.id} className="p-4 bg-slate-900 border border-slate-800 rounded-2xl flex items-center justify-between hover:bg-slate-800/50 transition-colors">
+                     <div className="flex flex-col gap-1">
+                        <span className="text-sm font-bold">{new Date(shift.clockInTime).toLocaleDateString()}</span>
+                        <div className="flex items-center gap-2 text-xs text-slate-500">
+                           <Clock size={12} />
+                           <span>{new Date(shift.clockInTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                           {shift.clockOutTime && (
+                             <>
+                               <span>→</span>
+                               <span>{new Date(shift.clockOutTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                             </>
+                           )}
+                        </div>
+                     </div>
+                     <div className="flex items-center gap-1.5 text-xs font-mono text-indigo-400 bg-indigo-500/5 px-2 py-1 rounded border border-indigo-500/10">
+                        <MapPin size={10} />
+                        <span>{shift.latitude.toFixed(2)}, {shift.longitude.toFixed(2)}</span>
+                     </div>
+                  </div>
+               ))}
+               {history.length === 0 && <p className="text-center py-10 text-slate-600 text-sm italic">New onboarded profile. No logs yet.</p>}
+            </div>
+         </aside>
       </div>
     </div>
   );

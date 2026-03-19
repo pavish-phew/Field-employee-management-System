@@ -1,5 +1,6 @@
 package com.fems.backend;
 
+import com.fems.backend.entity.Client;
 import com.fems.backend.entity.User;
 import com.fems.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -47,14 +48,61 @@ public class DataInitializer implements CommandLineRunner {
 
         // CREATE SAMPLE EMPLOYEE for testing
         if (userRepository.findByEmail("employee@fems.com").isEmpty()) {
-            User emp = new User();
-            emp.setName("Sample Employee");
-            emp.setEmail("employee@fems.com");
-            emp.setPassword(passwordEncoder.encode("emp123"));
-            emp.setRole("EMPLOYEE");
-            emp.setPhone("1112223333");
-            userRepository.save(emp);
+            User empUser = new User();
+            empUser.setName("Sample Employee");
+            empUser.setEmail("employee@fems.com");
+            empUser.setPassword(passwordEncoder.encode("emp123"));
+            empUser.setRole("EMPLOYEE");
+            empUser.setPhone("1112223333");
+            empUser = userRepository.save(empUser);
+
+            com.fems.backend.entity.Employee employee = new com.fems.backend.entity.Employee();
+            employee.setUser(empUser);
+            employeeRepository.save(employee);
             System.out.println("✅ SAMPLE EMPLOYEE CREATED: employee@fems.com / emp123");
+        }
+
+        // CREATE SAMPLE CLIENT for testing
+        if (userRepository.findByEmail("client@fems.com").isEmpty()) {
+            User cUser = new User();
+            cUser.setName("Sample Client Co");
+            cUser.setEmail("client@fems.com");
+            cUser.setPassword(passwordEncoder.encode("client123"));
+            cUser.setRole("CLIENT");
+            cUser.setPhone("5554443333");
+            userRepository.save(cUser);
+
+            Client client = new Client();
+            client.setUser(cUser);
+            client.setAddress("123 Client St, City");
+            client.setLatitude(12.34);
+            client.setLongitude(56.78);
+            clientRepository.save(client);
+            System.out.println("✅ SAMPLE CLIENT CREATED: client@fems.com / client123");
+        }
+
+        createSampleClient("Global Tech Solutions", "contact@globaltech.com", "Tech Park, Building 4", 12.97, 77.59);
+        createSampleClient("Apex Logistics Hub", "ops@apexlogistics.com", "Logistic Yard 14, Port Dr", 13.08, 80.27);
+        createSampleClient("Future Retail Corp", "info@futureretail.com", "Downtown Plaza, Floor 2", 19.07, 72.87);
+    }
+
+    private void createSampleClient(String name, String email, String address, double lat, double lon) {
+        if (userRepository.findByEmail(email).isEmpty()) {
+            User user = new User();
+            user.setName(name);
+            user.setEmail(email);
+            user.setPassword(passwordEncoder.encode("client123"));
+            user.setRole("CLIENT");
+            user.setPhone("9876543210");
+            userRepository.save(user);
+
+            Client client = new Client();
+            client.setUser(user);
+            client.setAddress(address);
+            client.setLatitude(lat);
+            client.setLongitude(lon);
+            clientRepository.save(client);
+            System.out.println("✅ CLIENT CREATED: " + email + " / client123");
         }
     }
 }

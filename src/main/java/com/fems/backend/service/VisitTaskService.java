@@ -55,6 +55,11 @@ public class VisitTaskService {
         return getTasksByEmployee(emp.getId());
     }
 
+    public List<TaskResponse> getTasksByClientUserId(Long userId) {
+        Client client = clientRepository.findByUserId(userId).orElseThrow();
+        return getTasksByClient(client.getId());
+    }
+
     public List<TaskResponse> getTasksByClient(Long clientId) {
         return visitTaskRepository.findByClientId(clientId).stream().map(this::mapToResponse).collect(Collectors.toList());
     }
@@ -76,10 +81,21 @@ public class VisitTaskService {
     private TaskResponse mapToResponse(VisitTask task) {
         TaskResponse response = new TaskResponse();
         response.setId(task.getId());
-        response.setEmployeeId(task.getEmployee().getId());
-        response.setEmployeeName(task.getEmployee().getUser().getName());
-        response.setClientId(task.getClient().getId());
-        response.setClientName(task.getClient().getName());
+        
+        if (task.getEmployee() != null) {
+            response.setEmployeeId(task.getEmployee().getId());
+            if (task.getEmployee().getUser() != null) {
+                response.setEmployeeName(task.getEmployee().getUser().getName());
+            }
+        }
+        
+        if (task.getClient() != null) {
+            response.setClientId(task.getClient().getId());
+            if (task.getClient().getUser() != null) {
+                response.setClientName(task.getClient().getUser().getName());
+            }
+        }
+        
         response.setTitle(task.getTitle());
         response.setDescription(task.getDescription());
         response.setStatus(task.getStatus());

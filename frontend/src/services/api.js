@@ -39,6 +39,8 @@ export const attendanceApi = {
   clockIn: (lat, lon) => api.post('/attendance/clock-in', { latitude: lat, longitude: lon }),
   clockOut: () => api.post('/attendance/clock-out'),
   getHistory: () => api.get('/attendance/me'),
+  getAllHistory: () => api.get('/attendance/all'),
+  getActiveLocations: () => api.get('/attendance/locations/active'),
 };
 
 // Employee API (Backwards Compatibility)
