@@ -21,7 +21,15 @@ import java.util.List;
 public class EmployeeController {
 
     private final VisitTaskService visitTaskService;
+    private final com.fems.backend.service.EmployeeService employeeService;
     private final UserRepository userRepository;
+
+    @PostMapping("/location/update")
+    @PreAuthorize("hasRole('EMPLOYEE')")
+    public ResponseEntity<Void> updateLocation(@RequestParam Double lat, @RequestParam Double lon) {
+        employeeService.updateLocation(getCurrentUserId(), lat, lon);
+        return ResponseEntity.ok().build();
+    }
 
     private Long getCurrentUserId() {
         UserDetails userDetails = (UserDetails) SecurityContextHolder.getContext().getAuthentication().getPrincipal();

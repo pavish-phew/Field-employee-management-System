@@ -58,6 +58,19 @@ public class EmployeeService {
         return attendanceRepository.findAll();
     }
 
+    @Transactional
+    public void updateLocation(Long userId, Double lat, Double lon) {
+        Employee emp = employeeRepository.findByUserId(userId)
+                .orElseThrow(() -> new RuntimeException("Employee not found"));
+        
+        Attendance att = attendanceRepository.findFirstByEmployeeIdAndClockOutTimeIsNullOrderByClockInTimeDesc(emp.getId())
+                .orElseThrow(() -> new RuntimeException("No active shift found to update location"));
+        
+        att.setLatitude(lat);
+        att.setLongitude(lon);
+        attendanceRepository.save(att);
+    }
+
     public List<Attendance> getActiveLocations() {
         return attendanceRepository.findByClockOutTimeIsNull();
     }

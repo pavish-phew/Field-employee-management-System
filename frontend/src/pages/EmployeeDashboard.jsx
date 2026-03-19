@@ -2,13 +2,14 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Play, StopCircle, Clock, MapPin, 
-  CheckCircle2, AlertCircle, History, LayoutDashboard, Navigation
+  CheckCircle2, AlertCircle, History, LayoutDashboard, Navigation, XCircle, CheckCircle
 } from 'lucide-react';
 import { employeeApi, attendanceApi } from '../services/api';
 import TaskCard from '../components/TaskCard';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
-import 'leaflet-routing-machine';
+import { toast, Toaster } from 'react-hot-toast';
+import LocationLabel from '../components/LocationLabel';
 
 // Fix for Leaflet marker icons
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
@@ -34,7 +35,10 @@ const EmployeeDashboard = ({ user }) => {
     
     // Live tracking for geo-fencing checks
     const geoId = navigator.geolocation.watchPosition(
-      (pos) => setCurrentPosition({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
+      (pos) => {
+        const coords = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+        setCurrentPosition(coords);
+      },
       (err) => console.error("Location tracking error", err),
       { enableHighAccuracy: true }
     );
@@ -44,6 +48,18 @@ const EmployeeDashboard = ({ user }) => {
       navigator.geolocation.clearWatch(geoId);
     };
   }, []);
+
+  // Production Tracking Loop (5-10s)
+  useEffect(() => {
+    let interval;
+    if (isClockedIn && currentPosition) {
+       interval = setInterval(() => {
+         employeeApi.updateLocation(currentPosition.lat, currentPosition.lon)
+           .catch(e => console.error("Tracking Error", e));
+       }, 10000); // 10s polling
+    }
+    return () => clearInterval(interval);
+  }, [isClockedIn, currentPosition]);
 
   const getDistance = (clientLat, clientLon) => {
     if (!currentPosition || !clientLat || !clientLon) return null;
@@ -133,20 +149,23 @@ const EmployeeDashboard = ({ user }) => {
     setError(null);
     try {
       if (nextStatus === 'IN_PROGRESS') {
-        // Must send position for Start Task geo-validation
         if (!currentPosition) {
-           setError("Waiting for GPS signal...");
+           toast.error("Waiting for GPS signal...");
            setLoading(false);
            return;
         }
         await employeeApi.updateTaskStatus(taskId, nextStatus, currentPosition.lat, currentPosition.lon);
+        toast.success("Task started! Drive safe.");
       } else {
         await employeeApi.updateTaskStatus(taskId, nextStatus);
+        toast.success("Task completed! Good job.");
       }
       loadData();
     } catch (e) {
       console.error('Task action failed', e);
-      setError(e.response?.data?.message || "Failed to update task status");
+      const msg = e.response?.data?.message || "Action failed";
+      toast.error(msg);
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -175,7 +194,8 @@ const EmployeeDashboard = ({ user }) => {
   };
 
   return (
-    <div className="space-y-8 animate-fadeIn">
+    <div className="space-y-8 animate-fadeIn relative">
+      <Toaster position="top-right" />
       {/* Shift Control Header */}
       <section className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 relative overflow-hidden shadow-2xl">
          <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-600/10 blur-[80px] -z-10"></div>
@@ -333,9 +353,9 @@ const EmployeeDashboard = ({ user }) => {
                            )}
                         </div>
                      </div>
-                     <div className="flex items-center gap-1.5 text-xs font-mono text-indigo-400 bg-indigo-500/5 px-2 py-1 rounded border border-indigo-500/10">
-                        <MapPin size={10} />
-                        <span>{shift.latitude.toFixed(2)}, {shift.longitude.toFixed(2)}</span>
+                     <div className="flex items-center gap-1.5 text-xs text-indigo-400 bg-indigo-500/5 px-3 py-1.5 rounded-xl border border-indigo-500/10 shadow-inner">
+                        <MapPin size={12} className="text-indigo-500" />
+                        <LocationLabel lat={shift.latitude} lon={shift.longitude} />
                      </div>
                   </div>
                ))}

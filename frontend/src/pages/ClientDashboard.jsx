@@ -3,6 +3,7 @@ import { clientApi } from '../services/api';
 import TaskCard from '../components/TaskCard';
 import { CheckCircle, XCircle, Briefcase, LayoutDashboard, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { toast, Toaster } from 'react-hot-toast';
 
 const ClientDashboard = ({ user }) => {
   const [tasks, setTasks] = useState([]);
@@ -29,15 +30,17 @@ const ClientDashboard = ({ user }) => {
   const handleUpdateStatus = async (taskId, status) => {
     try {
       await clientApi.updateTaskStatus(taskId, status);
+      toast.success(`Request ${status === 'CANCELLED' ? 'denied' : 'updated'}!`);
       loadData();
     } catch (e) {
       console.error('Status update failed', e);
-      alert("Failed to update task status");
+      toast.error("Failed to update task status");
     }
   };
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-10 relative">
+        <Toaster position="top-right" />
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div>
             <h1 className="text-4xl font-extrabold text-white tracking-tighter flex items-center gap-4">

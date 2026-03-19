@@ -72,8 +72,8 @@ public class VisitTaskService {
             Client client = task.getClient();
             if (client.getLatitude() != null && client.getLongitude() != null) {
                 double distance = calculateDistance(empLat, empLon, client.getLatitude(), client.getLongitude());
-                if (distance > 5.0) { // 5 km
-                    throw new RuntimeException("You are too far from client location (" + String.format("%.2f", distance) + " km)");
+                if (distance > 50.0) { // 50 km
+                    throw new RuntimeException("You are too far from client location (" + String.format("%.2f", distance) + " km). Range: 50km.");
                 }
             }
         }

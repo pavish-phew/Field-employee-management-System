@@ -60,7 +60,7 @@ export const employeeApi = {
   },
   clockIn: (userId, lat, lon) => attendanceApi.clockIn(lat, lon),
   clockOut: (userId) => attendanceApi.clockOut(),
-  updateLocation: (userId, lat, lon) => api.post('/api/employee/location/update', { latitude: lat, longitude: lon })
+  updateLocation: (lat, lon) => api.post(`/api/employee/location/update?lat=${lat}&lon=${lon}`)
 };
 
 // Client API

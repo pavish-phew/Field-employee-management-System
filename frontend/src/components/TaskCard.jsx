@@ -1,8 +1,8 @@
-import React from 'react';
 import { 
   Clock, MapPin, Navigation, CheckCircle2, 
   PlayCircle, AlertCircle, Calendar, XCircle
 } from 'lucide-react';
+import LocationLabel from './LocationLabel';
 
 const TaskCard = ({ task, onAction, distance }) => {
   const statusStyles = {
@@ -12,7 +12,7 @@ const TaskCard = ({ task, onAction, distance }) => {
     CANCELLED: "bg-rose-500/10 text-rose-500 border-rose-500/20",
   };
 
-  const isTooFar = distance !== null && distance > 5000;
+  const isTooFar = distance !== null && distance > 50000; // 50km range
 
   const getStatusButton = () => {
     if (task.status === 'PENDING') {
@@ -74,6 +74,9 @@ const TaskCard = ({ task, onAction, distance }) => {
          <div className="p-3 bg-slate-950/50 rounded-2xl">
             <p className="text-[9px] font-bold text-slate-600 uppercase mb-1">Destination</p>
             <p className="text-xs font-semibold text-slate-300 truncate">{task.clientName || 'HQ'}</p>
+            {task.clientLatitude && (
+               <LocationLabel lat={task.clientLatitude} lon={task.clientLongitude} className="text-[10px] text-slate-500 mt-1 block h-4 overflow-hidden" />
+            )}
          </div>
          <div className="p-3 bg-slate-950/50 rounded-2xl">
             <p className="text-[9px] font-bold text-slate-600 uppercase mb-1">Field Agent</p>
