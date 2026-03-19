@@ -18,6 +18,7 @@ let DefaultIcon = L.icon({ iconUrl: markerIcon, shadowUrl: markerShadow, iconSiz
 L.Marker.prototype.options.icon = DefaultIcon;
 
 import RoutingMachine from '../components/RoutingMachine';
+import NavigationSystem from '../components/NavigationSystem';
 
 const EmployeeDashboard = ({ user }) => {
   const [tasks, setTasks] = useState([]);
@@ -28,6 +29,7 @@ const EmployeeDashboard = ({ user }) => {
   const [error, setError] = useState(null);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [currentPosition, setCurrentPosition] = useState(null);
+  const [autoFollow, setAutoFollow] = useState(true); // Control mode
 
   useEffect(() => {
     loadData();
@@ -39,8 +41,11 @@ const EmployeeDashboard = ({ user }) => {
         const coords = { lat: pos.coords.latitude, lon: pos.coords.longitude };
         setCurrentPosition(coords);
       },
-      (err) => console.error("Location tracking error", err),
-      { enableHighAccuracy: true }
+      (err) => {
+        if (err.code === 3) console.warn("GPS Timeout during sync watcher.");
+        else console.error("Critical location tracking error", err);
+      },
+      { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
     );
 
     return () => {
@@ -205,7 +210,7 @@ const EmployeeDashboard = ({ user }) => {
                   <div className={`w-3 h-3 rounded-full ${isClockedIn ? 'bg-emerald-500 animate-pulse' : 'bg-slate-700'}`}></div>
                   <span className="text-xs font-bold uppercase tracking-widest text-slate-500">{isClockedIn ? 'On Duty' : 'Off Duty'}</span>
                </div>
-               <h2 className="text-4xl font-extrabold tracking-tight">Shift Control <span className="text-indigo-500 text-5xl">.</span></h2>
+               <h2 className="text-4xl font-extrabold tracking-tight">Attendance <span className="text-indigo-500 text-5xl"></span></h2>
                <div className="flex items-center gap-6 text-slate-400">
                   <div className="flex flex-col">
                     <span className="text-xs uppercase font-bold text-slate-600">Local Time</span>
@@ -277,17 +282,41 @@ const EmployeeDashboard = ({ user }) => {
               return (
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
                   <div className="bg-indigo-600/10 border border-indigo-500/20 rounded-[2.5rem] p-6 flex flex-col md:flex-row gap-8 items-center overflow-hidden">
-                    <div className="flex-1 w-full text-center md:text-left">
+                    <div className="flex-1 w-full text-center md:text-left relative">
                       <div className="flex items-center justify-center md:justify-start gap-3 mb-2">
-                        <Navigation className="text-indigo-400 animate-pulse" size={20} />
-                        <span className="text-xs font-bold text-indigo-400 uppercase tracking-widest">Active Navigation</span>
+                        <Navigation className={`text-indigo-400 ${autoFollow ? 'animate-pulse' : ''}`} size={20} />
+                        <span className="text-xs font-bold text-indigo-400 uppercase tracking-widest">
+                          {autoFollow ? 'Auto-Follow Active' : 'Free Exploration Mode'}
+                        </span>
                       </div>
                       <h3 className="text-2xl font-bold text-white mb-2 underline decoration-indigo-500/30 underline-offset-8">Heading to Site</h3>
-                      <p className="text-slate-400 text-sm italic font-medium">Route: Current Position → {activeTask.clientName}</p>
+                      <p className="text-slate-400 text-sm italic font-medium truncate mb-2">Target: {activeTask.clientName}</p>
+                      
+                      {(() => {
+                        const distMeters = getDistance(activeTask.clientLatitude, activeTask.clientLongitude);
+                        if (distMeters === null) return null;
+                        const distKm = (distMeters / 1000).toFixed(2);
+                        return (
+                          <div className="text-indigo-400 font-extrabold text-3xl mb-4 tracking-tighter">
+                            {distKm} <span className="text-xs uppercase tracking-[0.2em] text-slate-500 font-bold ml-1">km to site</span>
+                          </div>
+                        );
+                      })()}
+                      
+                      <button 
+                        onClick={() => setAutoFollow(!autoFollow)}
+                        className={`text-[10px] font-bold px-6 py-2.5 rounded-full border transition-all active:scale-95 shadow-xl ${
+                          autoFollow 
+                            ? 'bg-indigo-600 border-indigo-500 text-white shadow-indigo-600/20' 
+                            : 'bg-slate-800 border-slate-700 text-slate-400'
+                        }`}
+                      >
+                         {autoFollow ? 'LOCKED ON POSITION' : 'ENABLE FOLLOW MODE'}
+                      </button>
                     </div>
                     
                     {currentPosition && (
-                      <div className="w-full md:w-2/3 h-[250px] rounded-3xl overflow-hidden border border-slate-800 shadow-2xl relative z-10">
+                      <div className="w-full md:w-2/3 h-[300px] rounded-3xl overflow-hidden border border-slate-800 shadow-2xl relative z-10 group">
                         <MapContainer 
                           center={[currentPosition.lat, currentPosition.lon]} 
                           zoom={14} 
@@ -297,13 +326,35 @@ const EmployeeDashboard = ({ user }) => {
                           <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                           <RoutingMachine from={[currentPosition.lat, currentPosition.lon]} to={[activeTask.clientLatitude, activeTask.clientLongitude]} />
                           
-                          <Marker position={[activeTask.clientLatitude, activeTask.clientLongitude]} icon={L.divIcon({ html: '<div style="background:#ef4444;width:12px;height:12px;border-radius:50%;border:2px solid white;box-shadow:0 0 10px #ef4444;"></div>', iconSize:[12,12], iconAnchor:[6,6] })}>
-                            <Popup>{activeTask.clientName}</Popup>
-                          </Marker>
-                          
-                          <Marker position={[currentPosition.lat, currentPosition.lon]}>
-                            <Popup>Your current location</Popup>
-                          </Marker>
+                          {/* Real-time Navigation Component */}
+                          <NavigationSystem employee={user} followMode={autoFollow} />
+
+                          {/* Client Destination Marker - Green if Close */}
+                          {(() => {
+                            const isNear = getDistance(activeTask.clientLatitude, activeTask.clientLongitude) <= 50000;
+                            return (
+                              <Marker 
+                                position={[activeTask.clientLatitude, activeTask.clientLongitude]} 
+                                icon={L.divIcon({ 
+                                  html: `
+                                    <div style="background:${isNear ? '#10b981' : '#ef4444'}; width:16px; height:16px; border-radius:50%; border:2px solid white; box-shadow:0 0 15px ${isNear ? '#10b981' : '#ef4444'};">
+                                      ${isNear ? '<div class="absolute inset-0 bg-emerald-400 animate-ping opacity-20 rounded-full"></div>' : ''}
+                                    </div>
+                                  `, 
+                                  className: 'pulse-marker',
+                                  iconSize: [16, 16], 
+                                  iconAnchor: [8, 8] 
+                                })}
+                              >
+                                <Popup>
+                                  <div className="text-center p-2">
+                                     <h5 className="font-bold text-slate-900 border-b pb-1 mb-1">{activeTask.clientName}</h5>
+                                     <span className="text-[10px] text-slate-500">Destination Site</span>
+                                  </div>
+                                </Popup>
+                              </Marker>
+                            );
+                          })()}
                         </MapContainer>
                       </div>
                     )}
