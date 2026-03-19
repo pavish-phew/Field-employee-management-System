@@ -65,12 +65,34 @@ public class VisitTaskService {
     }
 
     @Transactional
-    public void updateTaskStatus(Long taskId, VisitTaskStatus status) {
+    public void updateTaskStatus(Long taskId, VisitTaskStatus status, Double empLat, Double empLon) {
         VisitTask task = visitTaskRepository.findById(taskId).orElseThrow();
+        
+        if (status == VisitTaskStatus.IN_PROGRESS && empLat != null && empLon != null) {
+            Client client = task.getClient();
+            if (client.getLatitude() != null && client.getLongitude() != null) {
+                double distance = calculateDistance(empLat, empLon, client.getLatitude(), client.getLongitude());
+                if (distance > 0.5) { // 500 meters
+                    throw new RuntimeException("You are too far from client location (" + String.format("%.0f", distance * 1000) + "m)");
+                }
+            }
+        }
+
         task.setStatus(status);
         if (status == VisitTaskStatus.IN_PROGRESS) task.setStartTime(LocalDateTime.now());
         if (status == VisitTaskStatus.COMPLETED) task.setEndTime(LocalDateTime.now());
         visitTaskRepository.save(task);
+    }
+
+    private double calculateDistance(double lat1, double lon1, double lat2, double lon2) {
+        final int R = 6371; // Radius of the earth
+        double latDistance = Math.toRadians(lat2 - lat1);
+        double lonDistance = Math.toRadians(lon2 - lon1);
+        double a = Math.sin(latDistance / 2) * Math.sin(latDistance / 2)
+                + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
+                * Math.sin(lonDistance / 2) * Math.sin(lonDistance / 2);
+        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c;
     }
 
     @Transactional
@@ -91,6 +113,8 @@ public class VisitTaskService {
         
         if (task.getClient() != null) {
             response.setClientId(task.getClient().getId());
+            response.setClientLatitude(task.getClient().getLatitude());
+            response.setClientLongitude(task.getClient().getLongitude());
             if (task.getClient().getUser() != null) {
                 response.setClientName(task.getClient().getUser().getName());
             }

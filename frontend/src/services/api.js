@@ -32,7 +32,11 @@ export const adminApi = {
   createTask: (data) => api.post('/api/tasks', data),
   getAllTasks: () => api.get('/api/tasks'),
   deleteTask: (id) => api.delete(`/api/tasks/${id}`),
-  updateTaskStatus: (taskId, status) => api.put(`/api/tasks/${taskId}/status?status=${status}`),
+  updateTaskStatus: (taskId, status, lat, lon) => {
+    let url = `/api/tasks/${taskId}/status?status=${status}`;
+    if (lat !== undefined && lon !== undefined) url += `&lat=${lat}&lon=${lon}`;
+    return api.put(url);
+  },
 };
 
 // Attendance API
@@ -49,6 +53,11 @@ export const employeeApi = {
   getMyTasks: () => api.get('/api/tasks/me'), // Use /me for security filters
   startTask: (taskId) => api.put(`/api/tasks/${taskId}/status?status=IN_PROGRESS`),
   completeTask: (taskId) => api.put(`/api/tasks/${taskId}/status?status=COMPLETED`),
+  updateTaskStatus: (taskId, status, lat, lon) => {
+    let url = `/api/tasks/${taskId}/status?status=${status}`;
+    if (lat !== undefined && lon !== undefined) url += `&lat=${lat}&lon=${lon}`;
+    return api.put(url);
+  },
   clockIn: (userId, lat, lon) => attendanceApi.clockIn(lat, lon),
   clockOut: (userId) => attendanceApi.clockOut(),
   updateLocation: (userId, lat, lon) => api.post('/api/employee/location/update', { latitude: lat, longitude: lon })

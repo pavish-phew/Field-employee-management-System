@@ -16,5 +16,7 @@ public class TaskResponse {
     private VisitTaskStatus status;
     private LocalDateTime startTime;
     private LocalDateTime endTime;
+    private Double clientLatitude;
+    private Double clientLongitude;
     private LocalDateTime createdAt;
 }

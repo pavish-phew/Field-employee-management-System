@@ -59,9 +59,13 @@ public class VisitTaskController {
     }
 
     @PutMapping("/{id}/status")
-    @PreAuthorize("hasAnyRole('EMPLOYEE', 'CLIENT')")
-    public ResponseEntity<Void> updateTaskStatus(@PathVariable(name = "id") Long id, @RequestParam(name = "status") VisitTaskStatus status) {
-        visitTaskService.updateTaskStatus(id, status);
+    @PreAuthorize("hasAnyRole('EMPLOYEE', 'ADMIN')") // Allow Admin too for manual fixes
+    public ResponseEntity<Void> updateTaskStatus(
+            @PathVariable(name = "id") Long id, 
+            @RequestParam(name = "status") VisitTaskStatus status,
+            @RequestParam(name = "lat", required = false) Double lat,
+            @RequestParam(name = "lon", required = false) Double lon) {
+        visitTaskService.updateTaskStatus(id, status, lat, lon);
         return ResponseEntity.ok().build();
     }
 

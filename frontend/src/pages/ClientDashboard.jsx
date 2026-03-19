@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { employeeApi, adminApi } from '../services/api';
 import TaskCard from '../components/TaskCard';
-import { CheckCircle, XCircle, Briefcase, LayoutDashboard } from 'lucide-react';
+import { CheckCircle, XCircle, Briefcase, LayoutDashboard, Users } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const ClientDashboard = ({ user }) => {

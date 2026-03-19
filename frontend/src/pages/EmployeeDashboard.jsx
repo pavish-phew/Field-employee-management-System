@@ -15,12 +15,36 @@ const EmployeeDashboard = ({ user }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [currentPosition, setCurrentPosition] = useState(null);
 
   useEffect(() => {
     loadData();
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-    return () => clearInterval(timer);
+    
+    // Live tracking for geo-fencing checks
+    const geoId = navigator.geolocation.watchPosition(
+      (pos) => setCurrentPosition({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
+      (err) => console.error("Location tracking error", err),
+      { enableHighAccuracy: true }
+    );
+
+    return () => {
+      clearInterval(timer);
+      navigator.geolocation.clearWatch(geoId);
+    };
   }, []);
+
+  const getDistance = (clientLat, clientLon) => {
+    if (!currentPosition || !clientLat || !clientLon) return null;
+    const R = 6371; // km
+    const dLat = (clientLat - currentPosition.lat) * Math.PI / 180;
+    const dLon = (clientLon - currentPosition.lon) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(currentPosition.lat * Math.PI / 180) * Math.cos(clientLat * Math.PI / 180) * 
+              Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c * 1000; // Return distance in meters
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -86,18 +110,34 @@ const EmployeeDashboard = ({ user }) => {
     }
   };
 
-  const handleStartTask = async (id) => {
-    await employeeApi.startTask(id);
-    loadData();
+  const handleStartTask = (taskId) => {
+    handleTaskAction(taskId, 'IN_PROGRESS');
   };
 
+  const handleStopTask = (taskId) => {
+    handleTaskAction(taskId, 'COMPLETED');
+  };
   const handleTaskAction = async (taskId, nextStatus) => {
+    setLoading(true);
+    setError(null);
     try {
-      await adminApi.updateTaskStatus(taskId, nextStatus);
+      if (nextStatus === 'IN_PROGRESS') {
+        // Must send position for Start Task geo-validation
+        if (!currentPosition) {
+           setError("Waiting for GPS signal...");
+           setLoading(false);
+           return;
+        }
+        await employeeApi.updateTaskStatus(taskId, nextStatus, currentPosition.lat, currentPosition.lon);
+      } else {
+        await employeeApi.updateTaskStatus(taskId, nextStatus);
+      }
       loadData();
     } catch (e) {
-      console.error('Task update failed', e);
-      alert("Failed to update task status");
+      console.error('Task action failed', e);
+      setError(e.response?.data?.message || "Failed to update task status");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -205,6 +245,7 @@ const EmployeeDashboard = ({ user }) => {
                     <TaskCard 
                       task={task} 
                       onAction={handleTaskAction} 
+                      distance={getDistance(task.clientLatitude, task.clientLongitude)}
                     />
                   </motion.div>
                 ))}

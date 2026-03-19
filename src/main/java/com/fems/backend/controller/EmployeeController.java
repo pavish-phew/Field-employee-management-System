@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -29,19 +30,22 @@ public class EmployeeController {
     }
 
     @GetMapping("/tasks")
+    @PreAuthorize("hasRole('EMPLOYEE')")
     public ResponseEntity<List<TaskResponse>> getMyTasks() {
         return ResponseEntity.ok(visitTaskService.getTasksByEmployeeUserId(getCurrentUserId()));
     }
 
     @PostMapping("/start-task/{taskId}")
+    @PreAuthorize("hasRole('EMPLOYEE')")
     public ResponseEntity<Void> startTask(@PathVariable(name = "taskId") Long taskId) {
-        visitTaskService.updateTaskStatus(taskId, VisitTaskStatus.IN_PROGRESS);
+        visitTaskService.updateTaskStatus(taskId, VisitTaskStatus.IN_PROGRESS, null, null);
         return ResponseEntity.ok().build();
     }
 
     @PostMapping("/complete-task/{taskId}")
+    @PreAuthorize("hasRole('EMPLOYEE')")
     public ResponseEntity<Void> completeTask(@PathVariable(name = "taskId") Long taskId) {
-        visitTaskService.updateTaskStatus(taskId, VisitTaskStatus.COMPLETED);
+        visitTaskService.updateTaskStatus(taskId, VisitTaskStatus.COMPLETED, null, null);
         return ResponseEntity.ok().build();
     }
 }

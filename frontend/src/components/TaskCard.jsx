@@ -4,7 +4,7 @@ import {
   PlayCircle, AlertCircle, Calendar, XCircle
 } from 'lucide-react';
 
-const TaskCard = ({ task, onAction }) => {
+const TaskCard = ({ task, onAction, distance }) => {
   const statusStyles = {
     PENDING: "bg-amber-500/10 text-amber-500 border-amber-500/20",
     IN_PROGRESS: "bg-indigo-500/10 text-indigo-500 border-indigo-500/20 animate-pulse",
@@ -12,15 +12,29 @@ const TaskCard = ({ task, onAction }) => {
     CANCELLED: "bg-rose-500/10 text-rose-500 border-rose-500/20",
   };
 
+  const isTooFar = distance !== null && distance > 500;
+
   const getStatusButton = () => {
     if (task.status === 'PENDING') {
       return (
-        <button 
-          onClick={() => onAction(task.id, 'IN_PROGRESS')}
-          className="flex-1 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-slate-100 hover:text-indigo-600 text-white px-6 py-3 rounded-2xl font-bold transition-all shadow-lg active:scale-95 shadow-indigo-900/40"
-        >
-          <PlayCircle size={18} /> Start Task
-        </button>
+        <div className="flex flex-col gap-2">
+          <button 
+            onClick={() => onAction(task.id, 'IN_PROGRESS')}
+            disabled={isTooFar}
+            className={`flex-1 flex items-center justify-center gap-2 px-6 py-3 rounded-2xl font-bold transition-all shadow-lg active:scale-95 ${
+              isTooFar 
+                ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700' 
+                : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-900/40'
+            }`}
+          >
+            <PlayCircle size={18} /> Start Task
+          </button>
+          {distance !== null && (
+            <p className={`text-[10px] text-center font-bold uppercase tracking-wider ${isTooFar ? 'text-rose-500' : 'text-emerald-500'}`}>
+              {isTooFar ? `Too far: ${Math.round(distance)}m away` : `In range: ${Math.round(distance)}m away`}
+            </p>
+          )}
+        </div>
       );
     }
     if (task.status === 'IN_PROGRESS') {
