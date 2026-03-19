@@ -32,6 +32,7 @@ export const adminApi = {
   createTask: (data) => api.post('/api/tasks', data),
   getAllTasks: () => api.get('/api/tasks'),
   deleteTask: (id) => api.delete(`/api/tasks/${id}`),
+  updateTaskStatus: (taskId, status) => api.put(`/api/tasks/${taskId}/status?status=${status}`),
 };
 
 // Attendance API

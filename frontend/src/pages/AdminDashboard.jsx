@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { adminApi, attendanceApi } from '../services/api';
 import { 
   Users, Briefcase, LayoutDashboard, History, Map as MapIcon, 
   PlusCircle, Trash2
 } from 'lucide-react';
+import { motion } from 'framer-motion';
 import TaskCard from '../components/TaskCard';
 
 // Fix for Leaflet marker icons in Vite
@@ -45,12 +46,57 @@ const AdminDashboard = () => {
   const [newClient, setNewClient] = useState({ name: '', email: '', password: 'client123', contactPerson: '', address: '', phone: '' });
   const [newTask, setNewTask] = useState({ employeeId: '', clientId: '', title: '', description: '' });
 
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
+  const [selectedClientId, setSelectedClientId] = useState('');
+  const [initialLoaded, setInitialLoaded] = useState(false);
+
+  // Static Client Data
+  const staticClients = [
+    { id: 'c1', name: 'Global Tech Solutions', latitude: 11.935, longitude: 79.815 },
+    { id: 'c2', name: 'Apex Logistics Hub', latitude: 11.950, longitude: 79.800 },
+    { id: 'c3', name: 'Future Retail Corp', latitude: 11.945, longitude: 79.820 },
+  ];
+
+  // Map Controller to handle centering ONLY when selectedEmployeeId changes
+  const ChangeMapView = () => {
+    const map = useMap();
+    useEffect(() => {
+      if (selectedEmployeeId) {
+        const loc = activeLocations.find(l => l.employee?.id === parseInt(selectedEmployeeId));
+        if (loc) map.flyTo([loc.latitude, loc.longitude], 15, { animate: true });
+      } else if (selectedClientId) {
+        const client = staticClients.find(c => c.id === selectedClientId);
+        if (client) map.flyTo([client.latitude, client.longitude], 15, { animate: true });
+      }
+    }, [selectedEmployeeId, selectedClientId, map]); // Removed activeLocations from deps to prevent re-centering on poll
+    return null;
+  };
+
+  const getFilteredLocations = () => {
+    if (!selectedEmployeeId) return activeLocations;
+    return activeLocations.filter(loc => loc.employee?.id === parseInt(selectedEmployeeId));
+  };
+
+  const employeeIcon = L.divIcon({
+    className: 'custom-div-icon',
+    html: "<div style='background-color:#6366f1; width:12px; height:12px; border-radius:50%; border:2px solid white; box-shadow:0 0 10px #6366f1;'></div>",
+    iconSize: [12, 12],
+    iconAnchor: [6, 6]
+  });
+
+  const clientIcon = L.divIcon({
+    className: 'custom-div-icon',
+    html: "<div style='background-color:#ef4444; width:12px; height:12px; border-radius:50%; border:2px solid white; box-shadow:0 0 10px #ef4444;'></div>",
+    iconSize: [12, 12],
+    iconAnchor: [6, 6]
+  });
+
   useEffect(() => { loadData(); }, [activeTab]);
 
   const loadData = async () => {
     setLoading(true);
     try {
-      if (activeTab === 'tasks' || activeTab === 'employees') {
+      if (activeTab === 'tasks' || activeTab === 'employees' || activeTab === 'map') {
         const empsData = await adminApi.getEmployees(); 
         setEmployees(empsData.data);
       }
@@ -86,7 +132,7 @@ const AdminDashboard = () => {
            const locData = await attendanceApi.getActiveLocations();
            setActiveLocations(locData.data);
          } catch (e) { console.error('Polling error', e); }
-       }, 10000);
+       }, 5000); // Faster polling for "Live Tracking"
     }
     return () => clearInterval(interval);
   }, [activeTab]);
@@ -129,8 +175,6 @@ const AdminDashboard = () => {
         </div>
       </div>
 
-      {/* Tabs handled by Layout/App.jsx mostly, but we can have sub-tabs or direct rendering here */}
-      
       {activeTab === 'tasks' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
            <div className="lg:col-span-1 border border-slate-800 bg-slate-900/50 rounded-2xl p-6 h-fit sticky top-24">
@@ -206,32 +250,106 @@ const AdminDashboard = () => {
       )}
 
       {activeTab === 'map' && (
-        <div className="h-[70vh] rounded-3xl overflow-hidden border border-slate-800 shadow-2xl relative">
-          <MapContainer center={[20, 78]} zoom={5} className="h-full w-full z-10">
-            <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-            {activeLocations.map(loc => (
-              <Marker key={loc.id} position={[loc.latitude, loc.longitude]}>
-                <Popup>
-                  <div className="p-1">
-                    <h4 className="font-bold text-indigo-900">{loc.employee?.user?.name}</h4>
-                    <p className="text-xs text-slate-600 mt-1">Status: <b>On Duty</b></p>
-                    <p className="text-xs text-slate-400 mt-0.5">Last update: {new Date(loc.clockInTime).toLocaleTimeString()}</p>
-                  </div>
-                </Popup>
-              </Marker>
-            ))}
-          </MapContainer>
-          <div className="absolute top-4 right-4 z-20 bg-slate-900/90 backdrop-blur p-4 rounded-2xl border border-slate-800 shadow-xl max-w-xs">
-             <h4 className="text-sm font-bold flex items-center gap-2 mb-3">Live Fleet ({activeLocations.length})</h4>
-             <div className="space-y-2 overflow-y-auto max-h-40 pr-2 custom-scrollbar">
-                {activeLocations.map(loc => (
-                  <div key={loc.id} className="flex items-center justify-between text-xs p-2 bg-slate-950/50 rounded-lg">
-                    <span>{loc.employee?.user?.name}</span>
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                  </div>
-                ))}
+        <div className="space-y-4 animate-fadeIn">
+          {/* Controls Bar */}
+          <div className="p-4 bg-slate-900 border border-slate-800 rounded-2xl flex flex-wrap items-center justify-between gap-4">
+             <div className="flex items-center gap-3">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Monitor Fleet</label>
+                <select 
+                  className="bg-slate-950 border border-slate-800 text-white text-sm rounded-xl px-4 py-2 focus:border-indigo-500 outline-none min-w-[200px]"
+                  value={selectedEmployeeId}
+                  onChange={e => setSelectedEmployeeId(e.target.value)}
+                >
+                  <option value="">All active employees</option>
+                  {activeLocations.map(loc => <option key={loc.employee?.id} value={loc.employee?.id}>{loc.employee?.user?.name}</option>)}
+                </select>
+             </div>
+             <div className="flex items-center gap-3">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Focus Client</label>
+                <select 
+                  className="bg-slate-950 border border-slate-800 text-white text-sm rounded-xl px-4 py-2 focus:border-indigo-500 outline-none min-w-[200px]"
+                  value={selectedClientId}
+                  onChange={e => { setSelectedClientId(e.target.value); setSelectedEmployeeId(''); }}
+                >
+                  <option value="">Choose Client</option>
+                  {staticClients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+             </div>
+             <div className="flex items-center gap-6">
+                <div className="flex items-center gap-2">
+                   <div className="w-3 h-3 rounded-full bg-indigo-500 shadow-[0_0_8px_#6366f1]"></div>
+                   <span className="text-xs font-medium text-slate-300">Employee</span>
+                </div>
+                <div className="flex items-center gap-2">
+                   <div className="w-3 h-3 rounded-full bg-rose-500 shadow-[0_0_8px_#ef4444]"></div>
+                   <span className="text-xs font-medium text-slate-300">Client Hubs</span>
+                </div>
              </div>
           </div>
+
+          <div className="h-[70vh] rounded-[2.5rem] overflow-hidden border border-slate-800 shadow-2xl relative">
+            <MapContainer center={[11.9416, 79.8083]} zoom={13} className="h-full w-full z-10">
+              <ChangeMapView />
+              <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+              
+              {/* Employee Markers */}
+              {getFilteredLocations().map(loc => (
+                <Marker key={loc.id} position={[loc.latitude, loc.longitude]} icon={employeeIcon}>
+                  <Popup>
+                    <div className="p-1">
+                      <h4 className="font-bold text-indigo-900">{loc.employee?.user?.name}</h4>
+                      <p className="text-xs text-slate-600 mt-1">Status: <b>On Duty</b></p>
+                      <p className="text-xs text-slate-400 mt-0.5 font-mono">{loc.latitude.toFixed(4)}, {loc.longitude.toFixed(4)}</p>
+                      <p className="text-[10px] text-slate-400 mt-1">Last update: {new Date(loc.clockInTime).toLocaleTimeString()}</p>
+                    </div>
+                  </Popup>
+                </Marker>
+              ))}
+
+              {/* Static Client Markers */}
+              {staticClients.map(client => (
+                <Marker key={client.id} position={[client.latitude, client.longitude]} icon={clientIcon}>
+                  <Popup>
+                    <div className="p-1">
+                      <h4 className="font-bold text-rose-900">{client.name}</h4>
+                      <p className="text-xs text-slate-600 mt-1">Type: <b>Corporate Office</b></p>
+                      <p className="text-xs text-slate-400 mt-0.5 font-mono">{client.latitude.toFixed(4)}, {client.longitude.toFixed(4)}</p>
+                    </div>
+                  </Popup>
+                </Marker>
+              ))}
+            </MapContainer>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'clients' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+           <div className="lg:col-span-1 border border-slate-800 bg-slate-900/50 rounded-2xl p-6 h-fit">
+             <h3 className="text-lg font-semibold mb-6 flex items-center gap-2">Onboard Client</h3>
+             <form onSubmit={handleCreateClient} className="space-y-4">
+                <input className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-white" placeholder="Client Name" value={newClient.name} onChange={e => setNewClient({...newClient, name: e.target.value})} required />
+                <input className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-white" placeholder="Email" value={newClient.email} onChange={e => setNewClient({...newClient, email: e.target.value})} required />
+                <input className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-white" type="password" placeholder="Password" value={newClient.password} onChange={e => setNewClient({...newClient, password: e.target.value})} required />
+                <motion.button whileHover={{ scale: 1.02 }} whileActive={{ scale: 0.98 }} type="submit" className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl transition-all">Add Client</motion.button>
+             </form>
+           </div>
+           <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+              {clients.map(c => (
+                <div key={c.id} className="p-5 bg-slate-900 border border-slate-800 rounded-2xl flex items-center justify-between group">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-slate-800 rounded-full flex items-center justify-center font-bold text-emerald-400 uppercase">{c.user?.name?.[0]}</div>
+                    <div className="flex-1">
+                      <h4 className="font-bold text-white leading-tight">{c.user?.name}</h4>
+                      <p className="text-xs text-slate-500 mt-1">{c.user?.email}</p>
+                      {c.phone && <p className="text-[10px] text-slate-600 font-mono mt-1">{c.phone}</p>}
+                    </div>
+                  </div>
+                  <button onClick={() => handleDeleteClient(c.id)} className="p-2 text-slate-600 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-all"><Trash2 size={18}/></button>
+                </div>
+              ))}
+              {clients.length === 0 && <div className="col-span-2 py-20 text-center border border-dashed border-slate-800 rounded-3xl text-slate-600 italic">No clients available yet.</div>}
+           </div>
         </div>
       )}
 

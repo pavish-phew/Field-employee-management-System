@@ -91,9 +91,36 @@ const EmployeeDashboard = ({ user }) => {
     loadData();
   };
 
-  const handleCompleteTask = async (id) => {
-    await employeeApi.completeTask(id);
-    loadData();
+  const handleTaskAction = async (taskId, nextStatus) => {
+    try {
+      await adminApi.updateTaskStatus(taskId, nextStatus);
+      loadData();
+    } catch (e) {
+      console.error('Task update failed', e);
+      alert("Failed to update task status");
+    }
+  };
+
+  const getStatusButton = (task) => {
+    if (task.status === 'COMPLETED') return <span className="text-slate-500 font-bold px-4 py-2 bg-slate-800/50 rounded-lg text-sm">Completed</span>;
+    if (task.status === 'IN_PROGRESS') {
+      return (
+        <button
+          onClick={() => handleTaskAction(task.id, 'COMPLETED')}
+          className="flex items-center gap-2 px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-lg font-bold transition-all shadow-lg shadow-rose-600/20"
+        >
+          <XCircle size={16} /> Stop Task
+        </button>
+      );
+    }
+    return (
+      <button
+        onClick={() => handleTaskAction(task.id, 'IN_PROGRESS')}
+        className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-bold transition-all shadow-lg shadow-indigo-600/20"
+      >
+        <CheckCircle size={16} /> Start Task
+      </button>
+    );
   };
 
   return (
@@ -177,7 +204,7 @@ const EmployeeDashboard = ({ user }) => {
                   <motion.div key={task.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.1 }}>
                     <TaskCard 
                       task={task} 
-                      onAction={task.status === 'PENDING' ? handleStartTask : (task.status === 'IN_PROGRESS' ? handleCompleteTask : null)} 
+                      onAction={handleTaskAction} 
                     />
                   </motion.div>
                 ))}
