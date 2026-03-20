@@ -257,12 +257,18 @@ const EmployeeDashboard = ({ user }) => {
            </h3>
            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               {tasks.map(t => (
-                <TaskCard key={t.id} task={t} onAction={async (tid, status) => {
+                <TaskCard key={t.id} task={t} gpsAvailable={isGpsReady && currentPosition} onAction={async (tid, status) => {
+                   if (status === 'IN_PROGRESS' && (!currentPosition?.lat || !currentPosition?.lon || isNaN(currentPosition.lat) || isNaN(currentPosition.lon))) {
+                      return toast.error("GPS SIGNAL REQUIRED: Please stand by for valid location before starting tasks.");
+                   }
                    try {
                      await employeeApi.updateTaskStatus(tid, status, currentPosition?.lat, currentPosition?.lon);
                      toast.success("Log Entry Updated");
                      loadData();
-                   } catch(e) { toast.error("Transmission Failed"); }
+                   } catch(e) { 
+                     const errorMsg = e.response?.data?.message || "Transmission Failed";
+                     toast.error(errorMsg); 
+                   }
                 }} distance={currentPosition ? getDistance(t.clientLatitude, t.clientLongitude) : null} />
               ))}
               {tasks.length === 0 && (

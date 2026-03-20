@@ -27,6 +27,7 @@ export const adminApi = {
   
   createClient: (data) => api.post('/api/clients', data),
   getClients: () => api.get('/admin/clients'),
+  updateClient: (id, data) => api.put(`/admin/clients/${id}`, data),
   deleteClient: (id) => api.delete(`/admin/clients/${id}`),
 
   getAllTasks: () => api.get('/api/tasks'),
@@ -34,10 +35,15 @@ export const adminApi = {
   updateTask: (id, data) => api.put(`/api/tasks/${id}`, data),
   deleteTask: (id) => api.delete(`/api/tasks/${id}`),
   updateTaskStatus: (taskId, status, lat, lon) => {
-    let url = `/api/tasks/${taskId}/status?status=${status}`;
-    if (lat !== undefined && lon !== undefined) url += `&lat=${lat}&lon=${lon}`;
-    return api.put(url);
+    return api.put(`/api/tasks/${taskId}/status`, null, {
+      params: { 
+        status, 
+        lat: lat !== undefined ? lat : null,
+        lon: lon !== undefined ? lon : null
+      }
+    });
   },
+  getTaskSummary: () => api.get('/api/tasks/admin/task-summary'),
 };
 
 // Attendance API
@@ -56,9 +62,13 @@ export const employeeApi = {
   startTask: (taskId) => api.put(`/api/tasks/${taskId}/status?status=IN_PROGRESS`),
   completeTask: (taskId) => api.put(`/api/tasks/${taskId}/status?status=COMPLETED`),
   updateTaskStatus: (taskId, status, lat, lon) => {
-    let url = `/api/tasks/${taskId}/status?status=${status}`;
-    if (lat !== undefined && lon !== undefined) url += `&lat=${lat}&lon=${lon}`;
-    return api.put(url);
+    return api.put(`/api/tasks/${taskId}/status`, null, {
+      params: { 
+        status, 
+        lat: lat !== undefined ? lat : null,
+        lon: lon !== undefined ? lon : null
+      }
+    });
   },
   clockIn: (userId, lat, lon) => attendanceApi.clockIn(lat, lon),
   clockOut: (userId) => attendanceApi.clockOut(),

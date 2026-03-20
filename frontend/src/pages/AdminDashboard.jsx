@@ -6,7 +6,8 @@ import L from 'leaflet';
 import { adminApi, attendanceApi } from '../services/api';
 import { 
   Users, Briefcase, LayoutDashboard, History, Map as MapIcon, 
-  Trash2, MapPin, Search, Filter, Mail, Info, Power, Navigation, Eye, Plus, X, UserPlus, ClipboardList
+  Trash2, MapPin, Search, Filter, Mail, Info, Power, Navigation, Eye, Plus, X, UserPlus, ClipboardList,
+  Activity, ArrowLeft, Clock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import TaskCard from '../components/TaskCard';
@@ -96,7 +97,7 @@ const getEmployeeStatus = (dateString) => {
   }
 };
 
-const LiveMapLayer = ({ locations, clients, trackedEmployeeId, trackedClientId, employeeHistory }) => {
+const LiveMapLayer = ({ locations, clients, trackedEmployeeId, trackedClientId, employeeHistory, viewingHistoryId }) => {
   const map = useMap();
   const markersRef = useRef({});
   const clientsAdded = useRef(false);
@@ -151,11 +152,16 @@ const LiveMapLayer = ({ locations, clients, trackedEmployeeId, trackedClientId, 
           </div>
         `;
 
-        L.marker([cLat, cLng], { icon }).addTo(map)
+        const marker = L.marker([cLat, cLng], { icon }).addTo(map)
          .bindPopup(popupContent, { className: 'premium-popup' });
+        
+        // Auto-open if selected in dropdown
+        if (String(c.id) === String(trackedClientId)) {
+           setTimeout(() => marker.openPopup(), 500);
+        }
       });
     }
-  }, [clients, map, locations, trackedEmployeeId]);
+  }, [clients, map, locations, trackedEmployeeId, trackedClientId]);
 
   useEffect(() => {
     locations.forEach(loc => {
@@ -254,7 +260,7 @@ const LiveMapLayer = ({ locations, clients, trackedEmployeeId, trackedClientId, 
     historyMarkersRef.current.forEach(m => map.removeLayer(m));
     historyMarkersRef.current = [];
 
-    if (employeeHistory && employeeHistory.length > 1) {
+    if (viewingHistoryId && employeeHistory && employeeHistory.length > 1) {
       const pathCoords = employeeHistory
         .map(h => [h.latitude, h.longitude])
         .filter(p => isValidCoord(p[0]) && isValidCoord(p[1]));
@@ -267,23 +273,38 @@ const LiveMapLayer = ({ locations, clients, trackedEmployeeId, trackedClientId, 
           smoothFactor: 1
         }).addTo(map);
 
-        // Add start/end markers for history if desired
-        const start = pathCoords[pathCoords.length - 1]; // Oldest
-        const end = pathCoords[0]; // Newest
+        // Start Marker (Green)
+        const start = pathCoords[pathCoords.length - 1];
+        const end = pathCoords[0];
         
-        const startMarker = L.circleMarker(start, { radius: 6, color: '#94a3b8', fillOpacity: 1 }).addTo(map)
-          .bindTooltip("Start Point");
-        const endMarker = L.circleMarker(end, { radius: 6, color: '#6366f1', fillOpacity: 1 }).addTo(map)
-          .bindTooltip("End Point");
+        const startIcon = L.divIcon({ 
+          html: '<div class="w-4 h-4 bg-emerald-500 border-2 border-white rounded-full shadow-lg"></div>', 
+          className: 'history-start' 
+        });
+        const endIcon = L.divIcon({ 
+          html: '<div class="w-4 h-4 bg-rose-500 border-2 border-white rounded-full shadow-lg"></div>', 
+          className: 'history-end' 
+        });
+
+        const startMarker = L.marker(start, { icon: startIcon }).addTo(map).bindTooltip("Trip Start");
+        const endMarker = L.marker(end, { icon: endIcon }).addTo(map).bindTooltip("Trip End");
           
-        historyMarkersRef.current = [startMarker, endMarker];
+        // Intermediate dots (optimized: show every 5th point if long path)
+        const dots = [];
+        pathCoords.forEach((p, index) => {
+          if (index !== 0 && index !== pathCoords.length - 1 && (pathCoords.length < 20 || index % 5 === 0)) {
+            const dot = L.circleMarker(p, { radius: 3, color: '#6366f1', fillOpacity: 0.6, weight: 1 }).addTo(map);
+            dots.push(dot);
+          }
+        });
+
+        historyMarkersRef.current = [startMarker, endMarker, ...dots];
         
-        // Fit view to history path
         const bounds = L.latLngBounds(pathCoords);
-        if (bounds.isValid()) map.fitBounds(bounds, { padding: [40, 40] });
+        if (bounds.isValid()) map.fitBounds(bounds, { padding: [60, 60] });
       }
     }
-  }, [employeeHistory, map]);
+  }, [employeeHistory, map, viewingHistoryId]);
 
   return null;
 };
@@ -398,6 +419,7 @@ const AdminDashboard = () => {
   const [tasks, setTasks] = useState([]);
   const [attendance, setAttendance] = useState([]);
   const [liveLocations, setLiveLocations] = useState([]);
+  const [taskSummary, setTaskSummary] = useState([]);
   const [loading, setLoading] = useState(false);
 
   // Modals Visibility
@@ -412,22 +434,37 @@ const AdminDashboard = () => {
   const [followMode, setFollowMode] = useState(true);
   const [employeeHistory, setEmployeeHistory] = useState([]);
   const [viewingHistoryId, setViewingHistoryId] = useState(null);
-  const lastStateRef = useRef({});
+  
+  const mapRef = useRef(null);
+  const initialFocusDone = useRef(false);
+  const lastStateRef = useRef({}); // Stores previous [id]: {pos, bearing} for direction calculation
+  
+  const [editingClient, setEditingClient] = useState(null);
+
+  // Auto-focus District Center ONLY ONCE
+  useEffect(() => {
+    if (activeTab === 'map' && mapRef.current && !initialFocusDone.current) {
+        mapRef.current.setView([11.9416, 79.8083], 12);
+        initialFocusDone.current = true;
+    }
+  }, [activeTab]);
 
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [empRes, cliRes, taskRes, attRes, locRes] = await Promise.all([
+      const [empRes, cliRes, taskRes, attRes, locRes, summaryRes] = await Promise.all([
         adminApi.getEmployees(),
         adminApi.getClients(),
         adminApi.getAllTasks(),
         attendanceApi.getAllHistory(),
-        attendanceApi.getActiveLocations()
+        attendanceApi.getActiveLocations(),
+        adminApi.getTaskSummary()
       ]);
       setEmployees(empRes.data);
       setClients(cliRes.data);
       setTasks(taskRes.data);
       setAttendance(attRes.data);
+      setTaskSummary(summaryRes.data || []);
       
       const newLocs = locRes.data
         .map(loc => ({ ...loc, latitude: Number(loc.latitude), longitude: Number(loc.longitude) }))
@@ -496,20 +533,30 @@ const AdminDashboard = () => {
 
   const ChangeMapView = () => {
     const map = useMap();
+    useEffect(() => { mapRef.current = map; }, [map]);
+
     useEffect(() => {
-      if (trackedEmployeeId && followMode) {
+      // Focus on tracked employee IF FOLLOW MODE IS ON
+      if (trackedEmployeeId && followMode && !viewingHistoryId) {
         const loc = liveLocations.find(l => String(l.employee?.id) === String(trackedEmployeeId));
-        if (loc && loc.latitude && loc.longitude) {
-           map.flyTo([loc.latitude, loc.longitude], 16, { animate: true });
+        const lat = Number(loc?.latitude), lng = Number(loc?.longitude);
+        if (isValidCoord(lat) && isValidCoord(lng)) {
+          map.flyTo([lat, lng], 16, { animate: true, duration: 1.5 });
         }
-      } else if (!trackedEmployeeId && liveLocations.length > 0) {
-        // Map Overview - fit all bounds
-        const validLocs = liveLocations.filter(l => isValidCoord(l.latitude) && isValidCoord(l.longitude));
-        if (validLocs.length === 0) return;
-        const bounds = L.latLngBounds(validLocs.map(l => [l.latitude, l.longitude]));
-        if (bounds.isValid()) map.flyToBounds(bounds, { padding: [50, 50], animate: true, duration: 1 });
       }
-    }, [trackedEmployeeId, followMode, liveLocations, map]);
+    }, [trackedEmployeeId, followMode, liveLocations, map, viewingHistoryId]);
+
+    useEffect(() => {
+      // Focus on selected client
+      if (trackedClientId && !viewingHistoryId) {
+        const client = clients.find(c => String(c.id) === String(trackedClientId));
+        const lat = Number(client?.latitude), lng = Number(client?.longitude);
+        if (isValidCoord(lat) && isValidCoord(lng)) {
+          map.flyTo([lat, lng], 16, { animate: true, duration: 1.5 });
+        }
+      }
+    }, [trackedClientId, clients, map, viewingHistoryId]);
+
     return null;
   };
 
@@ -540,6 +587,21 @@ const AdminDashboard = () => {
       loadData();
     } catch (err) { 
       const msg = err.response?.data?.message || "Creation Failed";
+      toast.error(msg); 
+    }
+  };
+
+  const handleUpdateClient = async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const data = Object.fromEntries(fd.entries());
+    try {
+      await adminApi.updateClient(editingClient.id, data);
+      toast.success("Client updated successfully");
+      setEditingClient(null);
+      loadData();
+    } catch (err) { 
+      const msg = err.response?.data?.message || "Update Failed";
       toast.error(msg); 
     }
   };
@@ -643,11 +705,11 @@ const AdminDashboard = () => {
         </div>
       </div>
 
-      <AnimatePresence mode="wait">
-        {activeTab === 'map' && (
+      <div className="tab-contents mt-8">
+        {/* Persistent Map Container (Hidden when not active) */}
+        <div style={{ display: activeTab === 'map' ? 'block' : 'none' }}>
            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-              {/* Map UI as before */}
-              <div className="h-[70vh] rounded-[3rem] overflow-hidden border border-slate-800 shadow-2xl relative">
+              <div className="h-[75vh] rounded-[3rem] overflow-hidden border border-slate-800 shadow-2xl relative">
                 <MapContainer center={[11.9416, 79.8083]} zoom={13} className="h-full w-full">
                   <ChangeMapView />
                   <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
@@ -657,31 +719,33 @@ const AdminDashboard = () => {
                      trackedEmployeeId={trackedEmployeeId}
                      trackedClientId={trackedClientId}
                      employeeHistory={employeeHistory}
+                     viewingHistoryId={viewingHistoryId}
                   />
                 </MapContainer>
                 
-                {/* Float Bar for selection */}
                 <div className="absolute top-6 left-6 z-[400] flex flex-col gap-4">
-                   <div className="flex items-center gap-4">
+                   <div className="flex flex-col sm:flex-row items-center gap-4">
                       <EmployeeDropdown locations={liveLocations} selected={trackedEmployeeId} onChange={setTrackedEmployeeId} />
                       <ClientDropdown clients={clients} selected={trackedClientId} onChange={setTrackedClientId} />
                    </div>
                    
                    {employeeHistory.length > 0 && (
                      <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} 
-                        className="bg-slate-900/90 backdrop-blur-md border border-slate-700 p-4 rounded-2xl shadow-2xl max-w-[280px]">
-                        <div className="flex justify-between items-center mb-3">
-                           <h4 className="text-xs font-black uppercase text-indigo-400 tracking-widest">Movement Stats</h4>
-                           <button onClick={() => setEmployeeHistory([])} className="text-slate-500 hover:text-white"><X size={14}/></button>
+                        className="bg-slate-900/90 backdrop-blur-md border border-slate-700 p-5 rounded-[2rem] shadow-2xl max-w-[280px]">
+                        <div className="flex justify-between items-center mb-4">
+                           <h4 className="text-[10px] font-black uppercase text-indigo-400 tracking-widest flex items-center gap-2">
+                              <Activity size={14} /> Journey Stats
+                           </h4>
+                           <button onClick={() => setEmployeeHistory([])} className="text-slate-500 hover:text-white p-1"><X size={14}/></button>
                         </div>
-                        <div className="space-y-2">
-                           <div className="flex justify-between text-[11px]">
-                              <span className="text-slate-500">Waypoints</span>
-                              <span className="text-white font-bold">{employeeHistory.length}</span>
+                        <div className="space-y-3">
+                           <div className="flex justify-between items-center text-[11px]">
+                              <span className="text-slate-500 font-medium">Waypoints</span>
+                              <span className="text-white font-black">{employeeHistory.length}</span>
                            </div>
-                           <div className="flex justify-between text-[11px]">
-                              <span className="text-slate-500">Timespan</span>
-                              <span className="text-white font-bold">
+                           <div className="flex justify-between items-center text-[11px]">
+                              <span className="text-slate-500 font-medium">Timespan</span>
+                              <span className="text-white font-black">
                                 {new Date(employeeHistory[employeeHistory.length-1].timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} - 
                                 {new Date(employeeHistory[0].timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
                               </span>
@@ -692,138 +756,148 @@ const AdminDashboard = () => {
                 </div>
               </div>
            </motion.div>
-        )}
+        </div>
 
-        {activeTab === 'dashboard' && (
-          <motion.div key="tasks" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-             {tasks.map(t => (
-               <div key={t.id} className="relative group/task">
-                 <TaskCard task={t} />
-                 <button
-                   onClick={() => setEditingTask(t)}
-                   className="absolute top-4 right-4 opacity-0 group-hover/task:opacity-100 transition-all bg-indigo-600/90 hover:bg-indigo-500 text-white text-[10px] font-extrabold uppercase tracking-widest px-3 py-1.5 rounded-xl flex items-center gap-1.5 shadow-lg backdrop-blur-sm z-10"
-                 >
-                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                   Edit
-                 </button>
-               </div>
-             ))}
-             {tasks.length === 0 && <p className="col-span-full py-40 text-center text-slate-600 font-bold uppercase tracking-widest text-xs">No active operations</p>}
-          </motion.div>
-        )}
+        <AnimatePresence mode="wait">
+          {activeTab === 'dashboard' && (
+             <motion.div key="dashboard" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+               {tasks.map(t => (
+                 <div key={t.id} className="relative group/task">
+                   <TaskCard task={t} />
+                   <button
+                     onClick={() => setEditingTask(t)}
+                     className="absolute top-4 right-4 opacity-0 group-hover/task:opacity-100 transition-all bg-indigo-600/90 hover:bg-indigo-500 text-white text-[10px] font-extrabold uppercase tracking-widest px-3 py-1.5 rounded-xl flex items-center gap-1.5 shadow-lg backdrop-blur-sm z-10"
+                   >
+                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                     Edit
+                   </button>
+                 </div>
+               ))}
+               {tasks.length === 0 && <p className="col-span-full py-40 text-center text-slate-600 font-bold uppercase tracking-widest text-xs">No active operations</p>}
+            </motion.div>
+          )}
 
-        {activeTab === 'team' && (
-           <motion.div key="team" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {employees.map(e => (
-                <div key={e.id} className="glass-card p-6 rounded-[2rem] flex items-center justify-between group border border-slate-800">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-indigo-500/10 rounded-xl flex items-center justify-center font-bold text-indigo-400">{e.user?.name?.[0]}</div>
-                    <div className="truncate max-w-[150px]">
-                      <h4 className="font-bold text-white truncate">{e.user?.name}</h4>
-                      <p className="text-[10px] text-slate-500 font-mono italic">{e.user?.role}</p>
+          {activeTab === 'team' && (
+             <motion.div key="team" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {employees.map(e => (
+                  <div key={e.id} className="glass-card p-6 rounded-[2rem] flex items-center justify-between group border border-slate-800">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 bg-indigo-500/10 rounded-xl flex items-center justify-center font-bold text-indigo-400">{e.user?.name?.[0]}</div>
+                      <div className="truncate max-w-[150px]">
+                        <h4 className="font-bold text-white truncate">{e.user?.name}</h4>
+                        <p className="text-[10px] text-slate-500 font-mono italic">{e.user?.role}</p>
+                      </div>
+                    </div>
+                    <button onClick={async () => { if(confirm('Delete?')) { await adminApi.deleteEmployee(e.id); loadData(); } }} className="p-2 text-slate-600 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-all"><Trash2 size={18}/></button>
+                  </div>
+                ))}
+             </motion.div>
+          )}
+
+          {activeTab === 'sites' && (
+             <motion.div key="sites" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {clients.map(c => (
+                  <div key={c.id} className="glass-card p-6 rounded-[2rem] flex items-center justify-between group border border-slate-800">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 bg-emerald-500/10 rounded-xl flex items-center justify-center font-bold text-emerald-400">{c.user?.name?.[0]}</div>
+                      <div>
+                        <h4 className="font-bold text-white">{c.user?.name}</h4>
+                        <p className="text-[10px] text-slate-500 italic"><LocationLabel lat={c.latitude} lon={c.longitude}/></p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => setEditingClient(c)} className="p-2 text-slate-600 hover:text-indigo-400 opacity-0 group-hover:opacity-100 transition-all"><Plus size={16}/></button>
+                      <button onClick={async () => { if(confirm('Delete Site?')) { await adminApi.deleteClient(c.id); loadData(); } }} className="p-2 text-slate-600 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-all"><Trash2 size={16}/></button>
                     </div>
                   </div>
-                  <button onClick={async () => { if(confirm('Delete?')) { await adminApi.deleteEmployee(e.id); loadData(); } }} className="p-2 text-slate-600 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-all"><Trash2 size={18}/></button>
-                </div>
-              ))}
-           </motion.div>
-        )}
+                ))}
+             </motion.div>
+          )}
 
-        {activeTab === 'sites' && (
-           <motion.div key="sites" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {clients.map(c => (
-                <div key={c.id} className="glass-card p-6 rounded-[2rem] flex items-center justify-between group border border-slate-800">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-emerald-500/10 rounded-xl flex items-center justify-center font-bold text-emerald-400">{c.user?.name?.[0]}</div>
-                    <div>
-                      <h4 className="font-bold text-white">{c.user?.name}</h4>
-                      <p className="text-[10px] text-slate-500 italic"><LocationLabel lat={c.latitude} lon={c.longitude}/></p>
-                    </div>
-                  </div>
-                  <button onClick={async () => { if(confirm('Delete Site?')) { await adminApi.deleteClient(c.id); loadData(); } }} className="p-2 text-slate-600 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-all"><Trash2 size={18}/></button>
+          {activeTab === 'records' && (
+             <motion.div key="records" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-8">
+                <div className="flex items-center justify-between px-2">
+                   <div>
+                      <h2 className="text-3xl font-extrabold text-white tracking-tighter uppercase">Audit Trail</h2>
+                      <p className="text-slate-500 font-bold text-[10px] uppercase tracking-widest mt-1">Hierarchical Task Completion Summary</p>
+                   </div>
+                   <History className="text-indigo-500 opacity-50" size={32} />
                 </div>
-              ))}
-           </motion.div>
-        )}
 
-        {activeTab === 'records' && (
-           <motion.div key="records" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-              <div className="flex justify-between items-center px-4">
-                 <h3 className="text-xl font-bold text-white tracking-tight">Shift Logs & History</h3>
-                 <div className="flex gap-2">
-                    <select 
-                       onChange={(e) => {
-                          setViewingHistoryId(e.target.value);
-                          if(e.target.value) loadEmployeeHistory(e.target.value);
-                       }}
-                       className="bg-slate-900 border border-slate-700 text-white rounded-xl px-4 py-2 text-xs font-bold outline-none"
-                    >
-                       <option value="">Detailed History (Select Employee)</option>
-                       {employees.map(e => <option key={e.id} value={e.id}>{e.user?.name}</option>)}
-                    </select>
-                 </div>
-              </div>
+                <div className="grid grid-cols-1 gap-6">
+                   {taskSummary.map((emp, idx) => (
+                      <div key={idx} className="glass-card rounded-[2.5rem] border border-slate-800 overflow-hidden shadow-xl animate-fadeInUp" style={{ animationDelay: `${idx * 0.1}s` }}>
+                         {/* Employee Header */}
+                         <div className="bg-slate-950/40 px-8 py-5 border-b border-slate-800 flex items-center gap-4">
+                            <div className="w-10 h-10 rounded-xl bg-indigo-600/20 flex items-center justify-center text-indigo-400 font-black">
+                               {emp.employeeName?.[0]}
+                            </div>
+                            <div>
+                               <h3 className="text-lg font-black text-white">{emp.employeeName}</h3>
+                               <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Employee Archive</p>
+                            </div>
+                         </div>
 
-              {viewingHistoryId && employeeHistory.length > 0 ? (
-                 <div className="glass-card rounded-[2.5rem] overflow-hidden border border-indigo-500/20 shadow-xl">
-                    <div className="bg-indigo-600/10 px-8 py-4 border-b border-indigo-500/10 flex justify-between items-center">
-                       <span className="text-[10px] font-black uppercase text-indigo-400 tracking-widest">Movement Trail for {employees.find(e => String(e.id) === String(viewingHistoryId))?.user?.name}</span>
-                       <button onClick={() => { setViewingHistoryId(null); setEmployeeHistory([]); }} className="text-xs font-bold text-indigo-400 hover:text-indigo-300">Close History</button>
-                    </div>
-                    <div className="max-h-[500px] overflow-y-auto custom-scrollbar">
-                       <table className="w-full text-left">
-                          <tbody className="divide-y divide-slate-800/40">
-                             {employeeHistory.map(h => (
-                                <tr key={h.id} className="hover:bg-slate-800/20 transition-colors">
-                                   <td className="px-8 py-4">
-                                      <div className="flex items-center gap-4">
-                                         <div className="p-2 bg-slate-950 rounded-lg text-slate-500"><MapPin size={14}/></div>
-                                         <div className="text-xs font-bold text-slate-300"><LocationLabel lat={h.latitude} lon={h.longitude} /></div>
-                                      </div>
-                                   </td>
-                                   <td className="px-8 py-4 text-[10px] font-mono text-slate-500 text-right">{new Date(h.timestamp).toLocaleString()}</td>
-                                </tr>
-                             ))}
-                          </tbody>
-                       </table>
-                    </div>
-                 </div>
-              ) : (
-                <div className="glass-card rounded-[3rem] overflow-hidden border border-slate-800 shadow-2xl">
-                   <table className="w-full text-left">
-                     <thead>
-                       <tr className="bg-slate-950/40 border-b border-slate-800"><th className="px-8 py-5 text-[10px] font-bold uppercase tracking-widest text-slate-500">Employee</th><th className="px-8 py-5 text-[10px] font-bold uppercase tracking-widest text-slate-500">Clock In</th><th className="px-8 py-5 text-[10px] font-bold uppercase tracking-widest text-slate-500">Last Active Location</th><th className="px-8 py-5 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-right">Actions</th></tr>
-                     </thead>
-                     <tbody className="divide-y divide-slate-800/40">
-                       {attendance.map(a => (
-                         <tr key={a.id} className="hover:bg-slate-800/30 transition-colors">
-                           <td className="px-8 py-4">
-                              <div className="font-bold text-slate-200 text-sm">{a.employee?.user?.name}</div>
-                              {a.clockOutTime && <div className="text-[10px] text-rose-500/60 font-black uppercase mt-0.5">Shift Ended</div>}
-                           </td>
-                           <td className="px-8 py-4 text-xs text-slate-400">{new Date(a.clockInTime).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</td>
-                           <td className="px-8 py-4 text-[10px] font-mono text-indigo-400 italic"><LocationLabel lat={a.latitude} lon={a.longitude} /></td>
-                           <td className="px-8 py-4 text-right">
-                              <button 
-                                 onClick={() => {
-                                    setViewingHistoryId(a.employee?.id);
-                                    loadEmployeeHistory(a.employee?.id);
-                                 }}
-                                 className="text-[10px] font-black uppercase bg-slate-800/50 hover:bg-indigo-600 hover:text-white px-3 py-1.5 rounded-lg text-slate-400 transition-all"
-                              >
-                                View Path
-                              </button>
-                           </td>
-                         </tr>
-                       ))}
-                       {attendance.length === 0 && <tr><td colSpan="4" className="text-center py-20 text-slate-600 font-bold uppercase tracking-widest text-[10px]">No shift logs found</td></tr>}
-                     </tbody>
-                   </table>
+                         {/* Clients Group */}
+                         <div className="p-4 space-y-4">
+                            {emp.clients.map((client, cIdx) => (
+                               <div key={cIdx} className="bg-slate-900/30 rounded-[2rem] border border-white/5 p-6 ml-4">
+                                  <div className="flex items-center gap-3 mb-5">
+                                     <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981]"></div>
+                                     <h4 className="font-extrabold text-slate-200 text-sm tracking-tight uppercase">{client.clientName}</h4>
+                                  </div>
+
+                                  {/* Tasks Table */}
+                                  <div className="overflow-hidden rounded-2xl border border-slate-800/50">
+                                     <table className="w-full text-left text-xs">
+                                        <thead>
+                                           <tr className="bg-slate-950/60 text-slate-500">
+                                              <th className="px-6 py-4 font-black uppercase tracking-widest">Task Title</th>
+                                              <th className="px-6 py-4 font-black uppercase tracking-widest">Status</th>
+                                              <th className="px-6 py-4 font-black uppercase tracking-widest">Completed At</th>
+                                           </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-800/30">
+                                           {client.tasks.map((task, tIdx) => (
+                                              <tr key={tIdx} className="hover:bg-white/5 transition-colors">
+                                                 <td className="px-6 py-4 font-bold text-slate-300">{task.taskTitle}</td>
+                                                 <td className="px-6 py-4">
+                                                    <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border ${
+                                                       task.status === 'COMPLETED' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+                                                       task.status === 'IN_PROGRESS' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20 animate-pulse' :
+                                                       'bg-slate-800 text-slate-500 border-slate-700'
+                                                    }`}>
+                                                       {task.status}
+                                                    </span>
+                                                 </td>
+                                                 <td className="px-6 py-4 text-slate-500 font-medium">
+                                                    {task.completedAt ? (
+                                                       <div className="flex flex-col">
+                                                          <span className="text-slate-300">{new Date(task.completedAt).toLocaleDateString()}</span>
+                                                          <span className="text-[10px] opacity-70">{new Date(task.completedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                                       </div>
+                                                    ) : '--'}
+                                                 </td>
+                                              </tr>
+                                           ))}
+                                        </tbody>
+                                     </table>
+                                  </div>
+                               </div>
+                            ))}
+                         </div>
+                      </div>
+                   ))}
+                   {taskSummary.length === 0 && (
+                      <div className="py-40 text-center glass-card rounded-[3rem] border border-slate-800 border-dashed">
+                         <p className="text-slate-600 font-black uppercase tracking-[0.4em] text-xs">No Audit Logs Found</p>
+                      </div>
+                   )}
                 </div>
-              )}
-           </motion.div>
-        )}
-      </AnimatePresence>
+             </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
 
       {/* --- Modals --- */}
       <Modal title="Add Employee" isOpen={showEmployeeModal} onClose={() => setShowEmployeeModal(false)}>
@@ -849,6 +923,40 @@ const AdminDashboard = () => {
            </div>
            <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold py-4 rounded-2xl transition-all shadow-xl shadow-indigo-600/20 active:scale-95 mt-4">Add Employee</button>
         </form>
+      </Modal>
+
+      <Modal title="Edit Client" isOpen={!!editingClient} onClose={() => setEditingClient(null)}>
+        {editingClient && (
+          <form onSubmit={handleUpdateClient} className="space-y-5">
+             <div className="space-y-2">
+                <label className="text-[10px] font-extrabold uppercase tracking-widest text-slate-500 ml-1">Client name</label>
+                <input name="name" required defaultValue={editingClient.user?.name} className="w-full input-premium rounded-2xl px-5 py-3.5 outline-none" placeholder="" />
+             </div>
+             <div className="space-y-2">
+                <label className="text-[10px] font-extrabold uppercase tracking-widest text-slate-500 ml-1">Location Address</label>
+                <input name="address" required defaultValue={editingClient.address} className="w-full input-premium rounded-2xl px-5 py-3.5 outline-none" />
+             </div>
+             <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-extrabold uppercase tracking-widest text-slate-500 ml-1">Latitude</label>
+                  <input name="latitude" type="number" step="any" required defaultValue={editingClient.latitude} className="w-full input-premium rounded-2xl px-5 py-3.5 outline-none" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-extrabold uppercase tracking-widest text-slate-500 ml-1">Longitude</label>
+                  <input name="longitude" type="number" step="any" required defaultValue={editingClient.longitude} className="w-full input-premium rounded-2xl px-5 py-3.5 outline-none" />
+                </div>
+             </div>
+             <div className="space-y-2">
+                <label className="text-[10px] font-extrabold uppercase tracking-widest text-slate-500 ml-1">Email</label>
+                <input name="email" type="email" required defaultValue={editingClient.user?.email} className="w-full input-premium rounded-2xl px-5 py-3.5 outline-none" />
+             </div>
+             <div className="space-y-2">
+                <label className="text-[10px] font-extrabold uppercase tracking-widest text-slate-500 ml-1">Update Password (Optional)</label>
+                <input name="password" type="password" className="w-full input-premium rounded-2xl px-5 py-3.5 outline-none" placeholder="Leave empty to keep current" />
+             </div>
+             <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold py-4 rounded-2xl transition-all shadow-xl shadow-indigo-600/20 active:scale-95 mt-4">Save Changes</button>
+          </form>
+        )}
       </Modal>
 
       <Modal title="Add Client" isOpen={showClientModal} onClose={() => setShowClientModal(false)}>

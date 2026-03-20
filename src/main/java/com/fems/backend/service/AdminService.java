@@ -81,5 +81,29 @@ public class AdminService {
     public void deleteClient(Long id) {
         clientRepository.deleteById(id);
     }
+
+    @Transactional
+    public void updateClient(Long id, CreateClientRequest request) {
+        Client client = clientRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Client not found"));
+        
+        User user = client.getUser();
+        if (request.getName() != null) user.setName(request.getName());
+        if (request.getEmail() != null && !user.getEmail().equals(request.getEmail())) {
+            if (userRepository.existsByEmail(request.getEmail())) {
+                throw new RuntimeException("Email already exists");
+            }
+            user.setEmail(request.getEmail());
+        }
+        if (request.getPassword() != null && !request.getPassword().isEmpty()) {
+            user.setPassword(passwordEncoder.encode(request.getPassword()));
+        }
+        userRepository.save(user);
+
+        if (request.getAddress() != null) client.setAddress(request.getAddress());
+        if (request.getLatitude() != null) client.setLatitude(request.getLatitude());
+        if (request.getLongitude() != null) client.setLongitude(request.getLongitude());
+        clientRepository.save(client);
+    }
 }
 

@@ -2,6 +2,7 @@ package com.fems.backend.controller;
 
 import com.fems.backend.dto.CreateTaskRequest;
 import com.fems.backend.dto.TaskResponse;
+import com.fems.backend.dto.TaskSummaryResponse;
 import com.fems.backend.entity.User;
 import com.fems.backend.entity.VisitTaskStatus;
 import com.fems.backend.repository.UserRepository;
@@ -72,15 +73,26 @@ public class VisitTaskController {
         return ResponseEntity.ok(visitTaskService.getTasksByClientUserId(user.getId()));
     }
 
+    @GetMapping("/admin/task-summary")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<List<TaskSummaryResponse>> getTaskSummary() {
+        return ResponseEntity.ok(visitTaskService.getTaskSummary());
+    }
+
     @PutMapping("/{id}/status")
-    @PreAuthorize("hasAnyRole('EMPLOYEE', 'ADMIN', 'CLIENT')") // Allow Admin too for manual fixes
-    public ResponseEntity<Void> updateTaskStatus(
+    @PreAuthorize("hasAnyRole('EMPLOYEE', 'ADMIN', 'CLIENT')") 
+    public ResponseEntity<?> updateTaskStatus(
             @PathVariable(name = "id") Long id, 
             @RequestParam(name = "status") VisitTaskStatus status,
             @RequestParam(name = "lat", required = false) Double lat,
             @RequestParam(name = "lon", required = false) Double lon) {
-        visitTaskService.updateTaskStatus(id, status, lat, lon);
-        return ResponseEntity.ok().build();
+        try {
+            visitTaskService.updateTaskStatus(id, status, lat, lon);
+            return ResponseEntity.ok().build();
+        } catch (Exception e) {
+            System.err.println("❌ Task status update failed: " + e.getMessage());
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
     }
 
     @DeleteMapping("/{id}")

@@ -2,6 +2,7 @@ package com.fems.backend.service;
 
 import com.fems.backend.dto.CreateTaskRequest;
 import com.fems.backend.dto.TaskResponse;
+import com.fems.backend.dto.TaskSummaryResponse;
 import com.fems.backend.entity.Client;
 import com.fems.backend.entity.Employee;
 import com.fems.backend.entity.VisitTask;
@@ -12,6 +13,10 @@ import com.fems.backend.repository.VisitTaskRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.ArrayList;
+import java.util.Map;
+import java.util.HashMap;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -88,15 +93,31 @@ public class VisitTaskService {
 
     @Transactional
     public void updateTaskStatus(Long taskId, VisitTaskStatus status, Double empLat, Double empLon) {
-        VisitTask task = visitTaskRepository.findById(taskId).orElseThrow();
+        System.out.println("--- TASK UPDATE REQUEST ---");
+        System.out.println("Task ID: " + taskId);
+        System.out.println("Status: " + status);
+        System.out.println("Emp Location: " + empLat + ", " + empLon);
+
+        VisitTask task = visitTaskRepository.findById(taskId)
+                .orElseThrow(() -> new RuntimeException("Task not found with ID: " + taskId));
         
-        if (status == VisitTaskStatus.IN_PROGRESS && empLat != null && empLon != null) {
+        if (status == VisitTaskStatus.IN_PROGRESS) {
+            if (task.getStatus() == VisitTaskStatus.IN_PROGRESS) {
+                throw new RuntimeException("Task is already in progress");
+            }
+            if (empLat == null || empLon == null) {
+                throw new RuntimeException("Live GPS location is required to start a task");
+            }
+            
             Client client = task.getClient();
-            if (client.getLatitude() != null && client.getLongitude() != null) {
+            if (client != null && client.getLatitude() != null && client.getLongitude() != null) {
                 double distance = calculateDistance(empLat, empLon, client.getLatitude(), client.getLongitude());
-                if (distance > 30.0) { // 30 km
-                    throw new RuntimeException("You are too far from client location (" + String.format("%.2f", distance) + " km). Range: 30km.");
+                System.out.println("Calculated distance to site: " + String.format("%.2f", distance) + " km");
+                if (distance > 30.0) { // 30 km limit
+                    throw new RuntimeException("Too far from site: " + String.format("%.2f", distance) + " km. (Must be < 30km)");
                 }
+            } else {
+                System.out.println("⚠️ Site has no coordinates on record. Skipping proximity check.");
             }
         }
 
@@ -104,6 +125,47 @@ public class VisitTaskService {
         if (status == VisitTaskStatus.IN_PROGRESS) task.setStartTime(LocalDateTime.now());
         if (status == VisitTaskStatus.COMPLETED) task.setEndTime(LocalDateTime.now());
         visitTaskRepository.save(task);
+        System.out.println("✅ TASK UPDATED SUCCESSFULLY");
+        System.out.println("---------------------------");
+    }
+
+    public List<TaskSummaryResponse> getTaskSummary() {
+        List<VisitTask> allTasks = visitTaskRepository.findAll();
+        
+        // Group by Employee Name -> then Client Name -> List of TaskItems
+        Map<String, Map<String, List<TaskSummaryResponse.TaskItem>>> groupedData = new HashMap<>();
+
+        for (VisitTask task : allTasks) {
+            String empName = (task.getEmployee() != null && task.getEmployee().getUser() != null) 
+                             ? task.getEmployee().getUser().getName() : "Unassigned";
+            String cliName = (task.getClient() != null && task.getClient().getUser() != null) 
+                             ? task.getClient().getUser().getName() : "General HQ";
+
+            TaskSummaryResponse.TaskItem item = TaskSummaryResponse.TaskItem.builder()
+                    .taskTitle(task.getTitle())
+                    .status(task.getStatus())
+                    .completedAt(task.getEndTime()) // End time is the completion date
+                    .build();
+
+            groupedData.computeIfAbsent(empName, k -> new HashMap<>())
+                       .computeIfAbsent(cliName, k -> new ArrayList<>())
+                       .add(item);
+        }
+
+        // Map the intermediate groupedData to List<TaskSummaryResponse>
+        return groupedData.entrySet().stream().map(empEntry -> {
+            List<TaskSummaryResponse.ClientSummary> clientSummaries = empEntry.getValue().entrySet().stream()
+                .map(cliEntry -> TaskSummaryResponse.ClientSummary.builder()
+                    .clientName(cliEntry.getKey())
+                    .tasks(cliEntry.getValue())
+                    .build())
+                .collect(Collectors.toList());
+
+            return TaskSummaryResponse.builder()
+                .employeeName(empEntry.getKey())
+                .clients(clientSummaries)
+                .build();
+        }).collect(Collectors.toList());
     }
 
     private double calculateDistance(double lat1, double lon1, double lat2, double lon2) {

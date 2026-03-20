@@ -53,5 +53,11 @@ public class AdminController {
         adminService.deleteClient(id);
         return ResponseEntity.noContent().build();
     }
+
+    @PutMapping("/admin/clients/{id}")
+    public ResponseEntity<String> updateClient(@PathVariable(name = "id") Long id, @RequestBody CreateClientRequest request) {
+        adminService.updateClient(id, request);
+        return ResponseEntity.ok("Client updated successfully");
+    }
 }
 

@@ -4,7 +4,7 @@ import {
 } from 'lucide-react';
 import LocationLabel from './LocationLabel';
 
-const TaskCard = ({ task, onAction, distance }) => {
+const TaskCard = ({ task, onAction, distance, gpsAvailable }) => {
   const statusStyles = {
     PENDING: "bg-amber-500/10 text-amber-500 border-amber-500/20",
     IN_PROGRESS: "bg-indigo-500/10 text-indigo-500 border-indigo-500/20 animate-pulse",
@@ -19,27 +19,30 @@ const TaskCard = ({ task, onAction, distance }) => {
     CANCELLED: "Voided"
   };
 
-  const isTooFar = distance !== null && distance > 50000; // 50km range
+  const isTooFar = distance !== null && distance > 30000; // 30km range (meters)
 
   const getStatusButton = () => {
     if (task.status === 'PENDING') {
       const distKm = distance !== null ? (distance / 1000).toFixed(2) : null;
+      const isDisabled = isTooFar || !gpsAvailable;
+      
       return (
         <div className="flex flex-col gap-3">
           <button 
             onClick={() => onAction(task.id, 'IN_PROGRESS')}
-            disabled={isTooFar}
+            disabled={isDisabled}
             className={`flex-1 flex items-center justify-center gap-2 px-8 py-4 rounded-2xl font-extrabold text-xs tracking-widest uppercase transition-all shadow-xl active:scale-95 ${
-              isTooFar 
+              isDisabled 
                 ? 'bg-slate-900 text-slate-600 cursor-not-allowed border border-slate-800' 
                 : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-900/40'
             }`}
           >
-            <PlayCircle size={18} /> Accept
+            <PlayCircle size={18} /> 
+            {!gpsAvailable ? 'Awaiting GPS...' : isTooFar ? 'Too Far' : 'Accept'}
           </button>
           {distance !== null && (
-            <p className={`text-[10px] text-center font-bold uppercase tracking-[0.2em] ${isTooFar ? 'text-rose-500' : 'text-slate-500'}`}>
-              {isTooFar ? `Outside Ops Range (${distKm}km)` : `Target Proximal (${distKm}km)`}
+            <p className={`text-[10px] text-center font-bold uppercase tracking-[0.2em] ${isTooFar || !gpsAvailable ? 'text-rose-500' : 'text-emerald-500'}`}>
+              {!gpsAvailable ? '🛰️ Signal Searching...' : isTooFar ? `${distKm} km ❌ Outside 30km Range` : `${distKm} km ✅ Within Range`}
             </p>
           )}
         </div>
