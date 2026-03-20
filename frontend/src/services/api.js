@@ -24,7 +24,7 @@ export const adminApi = {
   createEmployee: (data) => api.post('/api/employees', data),
   getEmployees: () => api.get('/admin/employees'),
   deleteEmployee: (id) => api.delete(`/admin/employees/${id}`),
-  
+
   createClient: (data) => api.post('/api/clients', data),
   getClients: () => api.get('/admin/clients'),
   updateClient: (id, data) => api.put(`/admin/clients/${id}`, data),
@@ -36,14 +36,15 @@ export const adminApi = {
   deleteTask: (id) => api.delete(`/api/tasks/${id}`),
   updateTaskStatus: (taskId, status, lat, lon) => {
     return api.put(`/api/tasks/${taskId}/status`, null, {
-      params: { 
-        status, 
+      params: {
+        status,
         lat: lat !== undefined ? lat : null,
         lon: lon !== undefined ? lon : null
       }
     });
   },
   getTaskSummary: () => api.get('/api/tasks/admin/task-summary'),
+  getEmployeeStats: () => api.get('/api/admin/employee-stats'),
 };
 
 // Attendance API
@@ -63,8 +64,8 @@ export const employeeApi = {
   completeTask: (taskId) => api.put(`/api/tasks/${taskId}/status?status=COMPLETED`),
   updateTaskStatus: (taskId, status, lat, lon) => {
     return api.put(`/api/tasks/${taskId}/status`, null, {
-      params: { 
-        status, 
+      params: {
+        status,
         lat: lat !== undefined ? lat : null,
         lon: lon !== undefined ? lon : null
       }

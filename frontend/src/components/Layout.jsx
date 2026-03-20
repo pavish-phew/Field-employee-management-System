@@ -25,7 +25,7 @@ const Layout = ({ children, user }) => {
 
   const navItems = {
     ADMIN: [
-      { path: '/admin', icon: LayoutDashboard, label: 'Overview' },
+      { path: '/admin', icon: LayoutDashboard, label: 'Tasks' },
       { path: '/admin/employees', icon: Users, label: 'Employees' },
       { path: '/admin/clients', icon: Briefcase, label: 'Clients' },
       { path: '/admin/map', icon: MapIcon, label: 'Live Tracking' },

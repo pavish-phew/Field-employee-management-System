@@ -4,7 +4,7 @@ import {
 } from 'lucide-react';
 import LocationLabel from './LocationLabel';
 
-const TaskCard = ({ task, onAction, distance, gpsAvailable }) => {
+const TaskCard = ({ task, onAction, distance, gpsAvailable, farTasksCount = 0 }) => {
   const statusStyles = {
     PENDING: "bg-amber-500/10 text-amber-500 border-amber-500/20",
     IN_PROGRESS: "bg-indigo-500/10 text-indigo-500 border-indigo-500/20 animate-pulse",
@@ -20,11 +20,12 @@ const TaskCard = ({ task, onAction, distance, gpsAvailable }) => {
   };
 
   const isTooFar = distance !== null && distance > 30000; // 30km range (meters)
+  const isFarLimitReached = farTasksCount >= 4;
 
   const getStatusButton = () => {
     if (task.status === 'PENDING') {
       const distKm = distance !== null ? (distance / 1000).toFixed(2) : null;
-      const isDisabled = isTooFar || !gpsAvailable;
+      const isDisabled = isTooFar || !gpsAvailable || (isTooFar && isFarLimitReached);
       
       return (
         <div className="flex flex-col gap-3">
@@ -38,7 +39,7 @@ const TaskCard = ({ task, onAction, distance, gpsAvailable }) => {
             }`}
           >
             <PlayCircle size={18} /> 
-            {!gpsAvailable ? 'Awaiting GPS...' : isTooFar ? 'Too Far' : 'Accept'}
+            {!gpsAvailable ? 'Awaiting GPS...' : (isTooFar && isFarLimitReached) ? 'Limit reached' : isTooFar ? 'Too Far' : 'Accept'}
           </button>
           {distance !== null && (
             <p className={`text-[10px] text-center font-bold uppercase tracking-[0.2em] ${isTooFar || !gpsAvailable ? 'text-rose-500' : 'text-emerald-500'}`}>

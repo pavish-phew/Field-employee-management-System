@@ -13,6 +13,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import TaskCard from '../components/TaskCard';
 import { toast, Toaster } from 'react-hot-toast';
 import LocationLabel from '../components/LocationLabel';
+import { 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer 
+} from 'recharts';
 
 // --- Premium CSS Gradients & Glass ---
 const premiumStyles = `
@@ -435,6 +438,9 @@ const AdminDashboard = () => {
   const [employeeHistory, setEmployeeHistory] = useState([]);
   const [viewingHistoryId, setViewingHistoryId] = useState(null);
   
+  const [showStatsModal, setShowStatsModal] = useState(false);
+  const [employeeStats, setEmployeeStats] = useState([]);
+  
   const mapRef = useRef(null);
   const initialFocusDone = useRef(false);
   const lastStateRef = useRef({}); // Stores previous [id]: {pos, bearing} for direction calculation
@@ -606,6 +612,19 @@ const AdminDashboard = () => {
     }
   };
 
+  const handleViewStats = async () => {
+    setLoading(true);
+    try {
+      const res = await adminApi.getEmployeeStats();
+      setEmployeeStats(res.data || []);
+      setShowStatsModal(true);
+    } catch (err) {
+      toast.error("Failed to load statistics");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleCreateTask = async (e) => {
     e.preventDefault();
     const fd = new FormData(e.target);
@@ -687,7 +706,7 @@ const AdminDashboard = () => {
         
         <div className="flex items-center gap-3">
            {activeTab === 'dashboard' && (
-             <button onClick={() => setShowTaskModal(true)} className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-2xl font-bold flex items-center gap-2 shadow-lg shadow-indigo-600/20 active:scale-95 transition-all underline decoration-indigo-400 decoration-2 underline-offset-4">
+             <button onClick={() => setShowTaskModal(true)} className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-2xl font-bold flex items-center gap-2 shadow-lg shadow-indigo-600/20 active:scale-95 transition-all decoration-indigo-400 decoration-2 underline-offset-4">
                <Plus size={18} /> Create Task
              </button>
            )}
@@ -821,7 +840,15 @@ const AdminDashboard = () => {
                       <h2 className="text-3xl font-extrabold text-white tracking-tighter uppercase">Audit Trail</h2>
                       <p className="text-slate-500 font-bold text-[10px] uppercase tracking-widest mt-1">Hierarchical Task Completion Summary</p>
                    </div>
-                   <History className="text-indigo-500 opacity-50" size={32} />
+                   <div className="flex items-center gap-4">
+                      <button 
+                        onClick={handleViewStats}
+                        className="bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-400 border border-indigo-500/30 px-5 py-2.5 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] transition-all flex items-center gap-2"
+                      >
+                         <Activity size={16} /> View Statistics
+                      </button>
+                      <History className="text-indigo-500 opacity-50" size={32} />
+                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 gap-6">
@@ -1095,6 +1122,65 @@ const AdminDashboard = () => {
             </form>
           );
         })()}
+      </Modal>
+
+      {/* --- Employee Statistics Modal --- */}
+      <Modal title="📊 Performance Analytics" isOpen={showStatsModal} onClose={() => setShowStatsModal(false)}>
+        <div className="w-full space-y-6 pt-2">
+          <div className="h-[350px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={employeeStats} margin={{ top: 20, right: 30, left: 0, bottom: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
+                <XAxis 
+                  dataKey="employeeName" 
+                  stroke="#94a3b8" 
+                  fontSize={10} 
+                  fontWeight="bold" 
+                  tickLine={false} 
+                  axisLine={false} 
+                  dy={10}
+                />
+                <YAxis 
+                  stroke="#94a3b8" 
+                  fontSize={10} 
+                  fontWeight="bold" 
+                  tickLine={false} 
+                  axisLine={false}
+                />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: '#0f172a', 
+                    border: '1px solid #334155', 
+                    borderRadius: '16px',
+                    fontSize: '11px',
+                    fontWeight: 'bold'
+                  }}
+                  cursor={{ fill: '#1e293b', opacity: 0.4 }}
+                />
+                <Legend 
+                  wrapperStyle={{ paddingTop: '20px', fontSize: '10px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.1em' }}
+                />
+                <Bar name="Completed" dataKey="completedTasks" fill="#10b981" radius={[6, 6, 0, 0]} barSize={35} />
+                <Bar name="Pending" dataKey="pendingTasks" fill="#6366f1" radius={[6, 6, 0, 0]} barSize={35} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+             <div className="bg-slate-900/50 p-4 rounded-2xl border border-slate-800">
+                <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Total Employees</p>
+                <p className="text-xl font-black text-white">{employeeStats.length}</p>
+             </div>
+             <div className="bg-slate-900/50 p-4 rounded-2xl border border-slate-800">
+                <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Avg Completion Rate</p>
+                <p className="text-xl font-black text-emerald-400">
+                   {employeeStats.length > 0 
+                     ? Math.round((employeeStats.reduce((acc, curr) => acc + curr.completedTasks, 0) / 
+                       employeeStats.reduce((acc, curr) => acc + curr.totalTasks, 0)) * 100)
+                     : 0}%
+                </p>
+             </div>
+          </div>
+        </div>
       </Modal>
     </div>
   );

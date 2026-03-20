@@ -59,5 +59,10 @@ public class AdminController {
         adminService.updateClient(id, request);
         return ResponseEntity.ok("Client updated successfully");
     }
+
+    @GetMapping("/api/admin/employee-stats")
+    public ResponseEntity<List<com.fems.backend.dto.EmployeeStatsResponse>> getEmployeeStats() {
+        return ResponseEntity.ok(adminService.getEmployeeStats());
+    }
 }
 

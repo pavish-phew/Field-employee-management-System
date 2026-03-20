@@ -19,12 +19,20 @@ const RoutingMachine = ({ from, to }) => {
   };
 
   const fetchRoute = async (retry = 0) => {
-    if (!from || !to) return;
+    // 🛡️ FRONTEND FIX: Validate coordinates
+    const isValidCoord = (c) => Array.isArray(c) && c.length >= 2 && 
+                                typeof c[0] === 'number' && typeof c[1] === 'number' && 
+                                !isNaN(c[0]) && !isNaN(c[1]);
+
+    if (!isValidCoord(from) || !isValidCoord(to)) {
+      console.warn("OSRM: Invalid or insufficient coordinates", { from, to });
+      return;
+    }
     
     setIsLoading(true);
     setError(null);
 
-    // Using OSRM Public Instance (OpenStreetMap powered)
+    // ✅ Correct order: lon,lat;lon,lat | Correct parameter: overview=full
     const url = `https://router.project-osrm.org/route/v1/driving/${from[1]},${from[0]};${to[1]},${to[0]}?overview=full&geometries=geojson`;
 
     try {
@@ -34,7 +42,13 @@ const RoutingMachine = ({ from, to }) => {
       const res = await fetch(url, { signal: controller.signal });
       clearTimeout(timeoutId);
 
-      if (!res.ok) throw new Error("OSRM API temporarily busy");
+      if (!res.ok) {
+        if (res.status === 400) {
+          console.warn("OSRM 400: Bad Request - check coordinate precision or constraints");
+          throw new Error("Invalid route request");
+        }
+        throw new Error("OSRM API temporarily busy");
+      }
       
       const data = await res.json();
       if (!data.routes || !data.routes.length) throw new Error("No route found");
@@ -44,12 +58,16 @@ const RoutingMachine = ({ from, to }) => {
       setError(null);
       retryCountRef.current = 0;
     } catch (err) {
-      if (retry < 2) { // 2 retries only
+      if (err.name === 'AbortError') {
+        console.warn("OSRM request timed out");
+      }
+
+      if (retry < 2 && err.message !== "Invalid route request" && err.message !== "No route found") { 
         console.warn(`OSRM retry ${retry + 1}...`);
         setTimeout(() => fetchRoute(retry + 1), 2000);
       } else {
-        console.warn("OSRM persistent error. Displaying direct destination path.");
-        setError("Turn-by-turn route unavailable. Showing direct path.");
+        console.warn("OSRM fallback active: Showing direct path.");
+        setError(err.message === "No route found" ? "No drivable route found." : "Route calculation unavailable.");
         setRouteLine([from, to]); // Fallback: Straight line
       }
     } finally {

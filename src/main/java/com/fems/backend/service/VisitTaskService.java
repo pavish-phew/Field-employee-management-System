@@ -10,6 +10,8 @@ import com.fems.backend.entity.VisitTaskStatus;
 import com.fems.backend.repository.ClientRepository;
 import com.fems.backend.repository.EmployeeRepository;
 import com.fems.backend.repository.VisitTaskRepository;
+import com.fems.backend.repository.EmployeeLocationHistoryRepository;
+import com.fems.backend.entity.EmployeeLocationHistory;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,11 +31,15 @@ public class VisitTaskService {
     private final VisitTaskRepository visitTaskRepository;
     private final EmployeeRepository employeeRepository;
     private final ClientRepository clientRepository;
+    private final EmployeeLocationHistoryRepository employeeLocationHistoryRepository;
 
     @Transactional
     public TaskResponse createVisitTask(CreateTaskRequest request) {
         Employee emp = employeeRepository.findById(request.getEmployeeId()).orElseThrow();
         Client client = clientRepository.findById(request.getClientId()).orElseThrow();
+
+        // VALIDATE LIMITS
+        validateTaskLimits(emp, client);
 
         VisitTask task = VisitTask.builder()
                 .employee(emp)
@@ -56,12 +62,18 @@ public class VisitTaskService {
     public TaskResponse updateVisitTask(Long taskId, CreateTaskRequest request) {
         VisitTask task = visitTaskRepository.findById(taskId).orElseThrow();
         
-        if (request.getEmployeeId() != null) {
-            Employee emp = employeeRepository.findById(request.getEmployeeId()).orElseThrow();
+        if (request.getEmployeeId() != null || request.getClientId() != null) {
+            Employee emp = (request.getEmployeeId() != null) 
+                    ? employeeRepository.findById(request.getEmployeeId()).orElseThrow() 
+                    : task.getEmployee();
+            Client client = (request.getClientId() != null) 
+                    ? clientRepository.findById(request.getClientId()).orElseThrow() 
+                    : task.getClient();
+            
+            if (request.getEmployeeId() != null || request.getClientId() != null) {
+                validateTaskLimits(emp, client);
+            }
             task.setEmployee(emp);
-        }
-        if (request.getClientId() != null) {
-            Client client = clientRepository.findById(request.getClientId()).orElseThrow();
             task.setClient(client);
         }
         if (request.getTitle() != null) task.setTitle(request.getTitle());
@@ -127,6 +139,39 @@ public class VisitTaskService {
         visitTaskRepository.save(task);
         System.out.println("✅ TASK UPDATED SUCCESSFULLY");
         System.out.println("---------------------------");
+    }
+
+    private void validateTaskLimits(Employee emp, Client client) {
+        if (emp == null || client == null) return;
+        
+        // Get last known location
+        List<EmployeeLocationHistory> history = employeeLocationHistoryRepository.findByEmployeeIdOrderByTimestampDesc(emp.getId());
+        if (history.isEmpty()) return; // Cannot validate without location history
+        
+        EmployeeLocationHistory lastLoc = history.get(0);
+        double dist = calculateDistance(lastLoc.getLatitude(), lastLoc.getLongitude(), client.getLatitude(), client.getLongitude());
+        
+        List<VisitTask> empTasks = visitTaskRepository.findByEmployeeId(emp.getId());
+        
+        // Calculate existing tasks in/out range
+        long tasksInRange = 0;
+        long tasksOutRange = 0;
+        
+        for (VisitTask t : empTasks) {
+            if (t.getClient() == null || t.getClient().getLatitude() == null) continue;
+            // For existing tasks, we use the client location relative to the employee's location when the task was *assigned*?
+            // User says: "Count tasks per employee. IF within range: allow until 10 tasks. IF outside range: allow only up to 4 tasks."
+            // This suggests checking the currently assigned tasks' distances.
+            double tDist = calculateDistance(lastLoc.getLatitude(), lastLoc.getLongitude(), t.getClient().getLatitude(), t.getClient().getLongitude());
+            if (tDist <= 30.0) tasksInRange++;
+            else tasksOutRange++;
+        }
+        
+        if (dist <= 30.0) {
+            if (tasksInRange >= 10) throw new RuntimeException("Task limit exceeded for this employee (Max 10 within range)");
+        } else {
+            if (tasksOutRange >= 4) throw new RuntimeException("Task limit exceeded for this employee (Max 4 outside range)");
+        }
     }
 
     public List<TaskSummaryResponse> getTaskSummary() {

@@ -153,6 +153,11 @@ const EmployeeDashboard = ({ user }) => {
 
   const activeTask = tasks.find(t => t.status === 'IN_PROGRESS' && t.clientLatitude);
 
+  const farTasksCount = tasks.filter(t => {
+    const dist = getDistance(t.clientLatitude, t.clientLongitude);
+    return dist !== null && dist > 30000 && (t.status === 'IN_PROGRESS' || t.status === 'PENDING');
+  }).length;
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-200 font-sans antialiased overflow-x-hidden">
       <Toaster position="top-right" />
@@ -269,7 +274,9 @@ const EmployeeDashboard = ({ user }) => {
                      const errorMsg = e.response?.data?.message || "Transmission Failed";
                      toast.error(errorMsg); 
                    }
-                }} distance={currentPosition ? getDistance(t.clientLatitude, t.clientLongitude) : null} />
+                }} distance={currentPosition ? getDistance(t.clientLatitude, t.clientLongitude) : null}
+                 farTasksCount={farTasksCount}
+              />
               ))}
               {tasks.length === 0 && (
                 <div className="col-span-full py-24 bg-slate-900/50 rounded-[3rem] border-2 border-slate-800 border-dashed text-center">
