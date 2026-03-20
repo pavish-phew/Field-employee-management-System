@@ -1,5 +1,6 @@
 package com.fems.backend.controller;
 
+import com.fems.backend.dto.LocationHistoryResponse;
 import com.fems.backend.dto.TaskResponse;
 import com.fems.backend.entity.User;
 import com.fems.backend.entity.VisitTaskStatus;
@@ -26,8 +27,11 @@ public class EmployeeController {
 
     @PostMapping("/location/update")
     @PreAuthorize("hasRole('EMPLOYEE')")
-    public ResponseEntity<Void> updateLocation(@RequestParam Double lat, @RequestParam Double lon) {
-        employeeService.updateLocation(getCurrentUserId(), lat, lon);
+    public ResponseEntity<Void> updateLocation(
+            @RequestParam Double lat, 
+            @RequestParam Double lon,
+            @RequestParam(required = false) Long clientId) {
+        employeeService.updateLocation(getCurrentUserId(), lat, lon, clientId);
         return ResponseEntity.ok().build();
     }
 
@@ -56,5 +60,16 @@ public class EmployeeController {
         visitTaskService.updateTaskStatus(taskId, VisitTaskStatus.COMPLETED, null, null);
         return ResponseEntity.ok().build();
     }
-}
 
+    /**
+     * GET /api/history/{employeeId}
+     * Returns the full movement history for a given employee ID.
+     * Accessible by ADMIN and EMPLOYEE roles.
+     */
+    @GetMapping("/history/{employeeId}")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('EMPLOYEE')")
+    public ResponseEntity<List<LocationHistoryResponse>> getLocationHistory(
+            @PathVariable(name = "employeeId") Long employeeId) {
+        return ResponseEntity.ok(employeeService.getLocationHistory(employeeId));
+    }
+}

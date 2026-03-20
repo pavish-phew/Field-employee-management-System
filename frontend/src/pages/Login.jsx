@@ -57,7 +57,7 @@ const Login = () => {
               <ShieldCheck size={44} strokeWidth={1.5} />
            </div>
            <div>
-              <h1 className="text-3xl font-extrabold text-white tracking-tight">Access Hub<span className="text-indigo-500 text-4xl">.</span></h1>
+              <h1 className="text-3xl font-extrabold text-white tracking-tight">Login <span className="text-indigo-500 text-4xl"></span></h1>
               <p className="text-slate-500 font-medium text-sm max-w-[240px] mt-2">Sign in to the Field Employee Management System</p>
            </div>
         </div>
@@ -74,7 +74,7 @@ const Login = () => {
 
         <form onSubmit={handleLogin} className="space-y-6">
           <div className="space-y-2">
-            <label className="text-xs font-bold text-slate-500 uppercase tracking-widest ml-1">Corporate ID</label>
+            <label className="text-xs font-bold text-slate-500 uppercase tracking-widest ml-1">Mail ID</label>
             <div className="relative group">
                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-indigo-500 transition-colors" size={20} />
                <input 
@@ -89,7 +89,7 @@ const Login = () => {
           </div>
 
           <div className="space-y-2">
-             <label className="text-xs font-bold text-slate-500 uppercase tracking-widest ml-1">Access Protocol</label>
+             <label className="text-xs font-bold text-slate-500 uppercase tracking-widest ml-1">Password</label>
              <div className="relative group">
                 <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-indigo-500 transition-colors" size={20} />
                 <input 
@@ -110,7 +110,7 @@ const Login = () => {
           >
              {loading ? <Loader2 size={24} className="animate-spin" /> : (
                <>
-                 <span className="text-xl">Authorize Access</span>
+                 <span className="text-xl">Login</span>
                  <LogIn size={22} className="group-hover:translate-x-1 transition-transform" />
                </>
              )}
@@ -118,14 +118,11 @@ const Login = () => {
         </form>
 
         <div className="text-center mt-10">
-           <p className="text-xs font-bold text-slate-700 uppercase tracking-widest italic opacity-50">Secure Connection Established 256-bit AES</p>
+           <p className="text-xs font-bold text-slate-700 uppercase tracking-widest italic opacity-50"></p>
         </div>
       </motion.div>
 
       <div className="mt-8 flex gap-8 text-xs font-bold text-slate-600 uppercase tracking-widest">
-         <span className="hover:text-slate-400 cursor-help transition-colors">Privacy Policy</span>
-         <span className="hover:text-slate-400 cursor-help transition-colors">Security Audit</span>
-         <span className="hover:text-slate-400 cursor-help transition-colors">&copy; 2026 FEMS Cloud</span>
       </div>
     </div>
   );

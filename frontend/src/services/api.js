@@ -21,16 +21,17 @@ api.interceptors.request.use(
 
 // Admin API
 export const adminApi = {
-  createEmployee: (data) => api.post('/admin/create-employee', data),
+  createEmployee: (data) => api.post('/api/employees', data),
   getEmployees: () => api.get('/admin/employees'),
   deleteEmployee: (id) => api.delete(`/admin/employees/${id}`),
   
-  createClient: (data) => api.post('/admin/create-client', data),
+  createClient: (data) => api.post('/api/clients', data),
   getClients: () => api.get('/admin/clients'),
   deleteClient: (id) => api.delete(`/admin/clients/${id}`),
 
-  createTask: (data) => api.post('/api/tasks', data),
   getAllTasks: () => api.get('/api/tasks'),
+  createTask: (data) => api.post('/api/tasks', data),
+  updateTask: (id, data) => api.put(`/api/tasks/${id}`, data),
   deleteTask: (id) => api.delete(`/api/tasks/${id}`),
   updateTaskStatus: (taskId, status, lat, lon) => {
     let url = `/api/tasks/${taskId}/status?status=${status}`;
@@ -45,7 +46,8 @@ export const attendanceApi = {
   clockOut: () => api.post('/attendance/clock-out'),
   getHistory: () => api.get('/attendance/me'),
   getAllHistory: () => api.get('/attendance/all'),
-  getActiveLocations: () => api.get('/attendance/locations/active'),
+  getActiveLocations: () => api.get('/api/location/all'),
+  getEmployeeHistory: (id) => api.get(`/api/employee/history/${id}`),
 };
 
 // Employee API (Backwards Compatibility)
@@ -60,7 +62,11 @@ export const employeeApi = {
   },
   clockIn: (userId, lat, lon) => attendanceApi.clockIn(lat, lon),
   clockOut: (userId) => attendanceApi.clockOut(),
-  updateLocation: (lat, lon) => api.post(`/api/employee/location/update?lat=${lat}&lon=${lon}`)
+  updateLocation: (lat, lon, clientId) => {
+    let url = `/api/employee/location/update?lat=${lat}&lon=${lon}`;
+    if (clientId) url += `&clientId=${clientId}`;
+    return api.post(url);
+  }
 };
 
 // Client API

@@ -13,7 +13,6 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/admin")
 @CrossOrigin("*")
 @RequiredArgsConstructor
 @PreAuthorize("hasRole('ADMIN')")
@@ -21,35 +20,35 @@ public class AdminController {
 
     private final AdminService adminService;
 
-    @PostMapping("/create-employee")
+    @PostMapping("/api/employees")
     public ResponseEntity<String> createEmployee(@RequestBody CreateEmployeeRequest request) {
         adminService.createEmployee(request);
         return ResponseEntity.ok("Employee created successfully");
     }
 
-    @PostMapping("/create-client")
+    @PostMapping("/api/clients")
     public ResponseEntity<String> createClient(@RequestBody CreateClientRequest request) {
         adminService.createClient(request);
         return ResponseEntity.ok("Client created successfully");
     }
 
-    @GetMapping("/employees")
+    @GetMapping("/admin/employees")
     public ResponseEntity<List<Employee>> getAllEmployees() {
         return ResponseEntity.ok(adminService.getAllEmployees());
     }
 
-    @GetMapping("/clients")
+    @GetMapping("/admin/clients")
     public ResponseEntity<List<Client>> getAllClients() {
         return ResponseEntity.ok(adminService.getAllClients());
     }
 
-    @DeleteMapping("/employees/{id}")
+    @DeleteMapping("/admin/employees/{id}")
     public ResponseEntity<Void> deleteEmployee(@PathVariable(name = "id") Long id) {
         adminService.deleteEmployee(id);
         return ResponseEntity.noContent().build();
     }
 
-    @DeleteMapping("/clients/{id}")
+    @DeleteMapping("/admin/clients/{id}")
     public ResponseEntity<Void> deleteClient(@PathVariable(name = "id") Long id) {
         adminService.deleteClient(id);
         return ResponseEntity.noContent().build();

@@ -48,7 +48,7 @@ const Layout = ({ children, user }) => {
       <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 border-r border-slate-800 transition-transform duration-300 transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:relative lg:translate-x-0`}>
         <div className="flex flex-col h-full">
           <div className="p-6 flex items-center justify-between">
-            <h1 className="text-2xl font-bold text-indigo-500 tracking-tight">FEMS<span className="text-slate-400">.pro</span></h1>
+            <h1 className="text-2xl font-bold text-indigo-500 tracking-tight">FEMS<span className="text-slate-400"></span></h1>
             <button className="lg:hidden text-slate-400" onClick={() => setIsSidebarOpen(false)}>
               <X size={20} />
             </button>

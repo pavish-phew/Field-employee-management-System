@@ -1,54 +1,72 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+
+// Global cache to avoid repeated Nominatim calls across re-renders/components
+const locationCache = {};
 
 const LocationLabel = ({ lat, lon, className = "" }) => {
-  const [label, setLabel] = useState("");
-  
+  const [address, setAddress] = useState("");
+  const fetchInProgress = useRef(false);
+
+  // Normalize coordinates for efficient caching (3 decimal places ~= 110m precision)
+  const normalizedLat = lat ? parseFloat(lat).toFixed(3) : null;
+  const normalizedLon = lon ? parseFloat(lon).toFixed(3) : null;
+  const cacheKey = `${normalizedLat},${normalizedLon}`;
+
   useEffect(() => {
-    if (!lat || !lon) return;
+    if (!normalizedLat || !normalizedLon) return;
+
+    // 1. Check Cache immediately
+    if (locationCache[cacheKey]) {
+      setAddress(locationCache[cacheKey]);
+      return;
+    }
+
+    // 3. Prevent redundant fetches
+    if (fetchInProgress.current) return;
 
     const fetchLocation = async () => {
-      // Use a simple global cache to avoid repeated calls across components
-      const cacheKey = `${parseFloat(lat).toFixed(4)},${parseFloat(lon).toFixed(4)}`;
-      if (window._locationCache && window._locationCache[cacheKey]) {
-        setLabel(window._locationCache[cacheKey]);
-        return;
-      }
-
+      fetchInProgress.current = true;
       try {
-        // Respect Nominatim's usage policy (1 request/sec max)
-        // Since we might have multiple labels, we add a random delay to stagger
-        await new Promise(r => setTimeout(r, Math.random() * 1000));
-
-        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`);
-        if (!res.ok) throw new Error("Rate limit or API error");
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?lat=${normalizedLat}&lon=${normalizedLon}&format=json&zoom=16`
+        );
+        
+        if (!res.ok) throw new Error("OSM Limit");
         
         const data = await res.json();
-        
-        // Extract area/city as requested
         const addr = data.address || {};
-        const area = addr.suburb || addr.neighbourhood || addr.road || addr.village || addr.town || "";
-        const city = addr.city || addr.state_district || "Puducherry";
         
-        const result = area ? `${area}, ${city}` : city;
+        // Extract meaningful area names: Suburb/Neighbourhood -> Road -> Village/Town
+        const area = addr.suburb || addr.neighbourhood || addr.suburb || addr.road || addr.village || addr.town || "";
+        const city = addr.city || addr.state_district || addr.county || "Puducherry";
         
-        if (!window._locationCache) window._locationCache = {};
-        window._locationCache[cacheKey] = result;
-        setLabel(result);
+        const result = area && city ? `${area}, ${city}` : (area || city || "Nearby");
+        
+        // Store in global cache
+        locationCache[cacheKey] = result;
+        setAddress(result);
       } catch (e) {
-        console.error("Geocoding failed", e);
-        setLabel("Location unavailable");
+        // Silent failure - we'll just keep showing coordinates as fallback
+        console.warn("Geocode standby:", e.message);
+      } finally {
+        fetchInProgress.current = false;
       }
     };
 
     fetchLocation();
-  }, [lat, lon]);
+  }, [normalizedLat, normalizedLon, cacheKey]);
+
+  // Display raw coordinates if address isn't ready
+  const coordinateDisplay = lat && lon ? `${parseFloat(lat).toFixed(4)}, ${parseFloat(lon).toFixed(4)}` : "Tracking...";
 
   return (
-    <span className={`inline-flex items-center gap-1.5 ${className}`}>
-      {label || (
-        <span className="flex items-center gap-2 opacity-50">
-          <div className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-pulse"></div>
-          Locating...
+    <span className={`inline-flex items-center gap-2 font-medium tracking-tight whitespace-nowrap overflow-hidden text-ellipsis ${className}`}>
+      {address ? (
+        <span className="animate-fadeIn">{address}</span>
+      ) : (
+        <span className="flex items-center gap-2 opacity-60">
+           <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(99,102,241,0.5)]"></span>
+           {coordinateDisplay}
         </span>
       )}
     </span>

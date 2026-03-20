@@ -34,7 +34,7 @@ public class AdminService {
         user.setName(request.getName());
         user.setEmail(request.getEmail());
         user.setPassword(passwordEncoder.encode(request.getPassword()));
-        user.setRole("EMPLOYEE");
+        user.setRole(request.getRole() != null && !request.getRole().isEmpty() ? request.getRole().toUpperCase() : "EMPLOYEE");
         user.setPhone(request.getPhone());
         user = userRepository.save(user);
 

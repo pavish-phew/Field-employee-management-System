@@ -35,7 +35,8 @@ public class VisitTaskService {
                 .client(client)
                 .title(request.getTitle())
                 .description(request.getDescription())
-                .status(VisitTaskStatus.PENDING)
+                .status(request.getStatus() != null ? request.getStatus() : VisitTaskStatus.PENDING)
+                .startTime(request.getStartTime())
                 .build();
         
         task = visitTaskRepository.save(task);
@@ -44,6 +45,27 @@ public class VisitTaskService {
 
     public List<TaskResponse> getAllTasks() {
         return visitTaskRepository.findAll().stream().map(this::mapToResponse).collect(Collectors.toList());
+    }
+
+    @Transactional
+    public TaskResponse updateVisitTask(Long taskId, CreateTaskRequest request) {
+        VisitTask task = visitTaskRepository.findById(taskId).orElseThrow();
+        
+        if (request.getEmployeeId() != null) {
+            Employee emp = employeeRepository.findById(request.getEmployeeId()).orElseThrow();
+            task.setEmployee(emp);
+        }
+        if (request.getClientId() != null) {
+            Client client = clientRepository.findById(request.getClientId()).orElseThrow();
+            task.setClient(client);
+        }
+        if (request.getTitle() != null) task.setTitle(request.getTitle());
+        if (request.getDescription() != null) task.setDescription(request.getDescription());
+        if (request.getStatus() != null) task.setStatus(request.getStatus());
+        if (request.getStartTime() != null) task.setStartTime(request.getStartTime());
+        
+        task = visitTaskRepository.save(task);
+        return mapToResponse(task);
     }
 
     public List<TaskResponse> getTasksByEmployee(Long employeeId) {
@@ -72,8 +94,8 @@ public class VisitTaskService {
             Client client = task.getClient();
             if (client.getLatitude() != null && client.getLongitude() != null) {
                 double distance = calculateDistance(empLat, empLon, client.getLatitude(), client.getLongitude());
-                if (distance > 50.0) { // 50 km
-                    throw new RuntimeException("You are too far from client location (" + String.format("%.2f", distance) + " km). Range: 50km.");
+                if (distance > 30.0) { // 30 km
+                    throw new RuntimeException("You are too far from client location (" + String.format("%.2f", distance) + " km). Range: 30km.");
                 }
             }
         }

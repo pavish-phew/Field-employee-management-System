@@ -78,7 +78,7 @@ const AdminUserManagement = () => {
                                 <input
                                     required
                                     className="w-full pl-11 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none dark:bg-slate-900 dark:border-slate-700 dark:text-white"
-                                    placeholder="e.g. John Doe"
+                                    placeholder=""
                                     value={formData.name}
                                     onChange={e => setFormData({ ...formData, name: e.target.value })}
                                 />
@@ -92,7 +92,7 @@ const AdminUserManagement = () => {
                                 <input
                                     type="email" required
                                     className="w-full pl-11 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none dark:bg-slate-900 dark:border-slate-700 dark:text-white"
-                                    placeholder="john@example.com"
+                                    placeholder=""
                                     value={formData.email}
                                     onChange={e => setFormData({ ...formData, email: e.target.value })}
                                 />

@@ -29,6 +29,12 @@ public class VisitTaskController {
         return ResponseEntity.ok(visitTaskService.createVisitTask(request));
     }
 
+    @PutMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<TaskResponse> updateVisitTask(@PathVariable(name = "id") Long id, @RequestBody CreateTaskRequest request) {
+        return ResponseEntity.ok(visitTaskService.updateVisitTask(id, request));
+    }
+
     @GetMapping
     public ResponseEntity<List<TaskResponse>> getAllTasks() {
         return ResponseEntity.ok(visitTaskService.getAllTasks());

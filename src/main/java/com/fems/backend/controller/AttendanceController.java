@@ -15,7 +15,6 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/attendance")
 @CrossOrigin("*")
 @RequiredArgsConstructor
 public class AttendanceController {
@@ -30,35 +29,41 @@ public class AttendanceController {
         return user.getId();
     }
 
-    @PostMapping("/clock-in")
+    @PostMapping("/attendance/clock-in")
     @PreAuthorize("hasRole('EMPLOYEE')")
     public ResponseEntity<String> clockIn(@RequestBody ClockInRequest request) {
         employeeService.clockIn(getCurrentUserId(), request.getLatitude(), request.getLongitude());
         return ResponseEntity.ok("Clocked in successfully");
     }
 
-    @PostMapping("/clock-out")
+    @PostMapping("/attendance/clock-out")
     @PreAuthorize("hasRole('EMPLOYEE')")
     public ResponseEntity<String> clockOut() {
         employeeService.clockOut(getCurrentUserId());
         return ResponseEntity.ok("Clocked out successfully");
     }
 
-    @GetMapping("/me")
+    @GetMapping("/attendance/me")
     @PreAuthorize("hasAnyRole('EMPLOYEE', 'ADMIN')")
     public ResponseEntity<List<Attendance>> getMyAttendance() {
         return ResponseEntity.ok(employeeService.getMyAttendance(getCurrentUserId()));
     }
 
-    @GetMapping("/all")
+    @GetMapping("/attendance/all")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<List<Attendance>> getAllAttendance() {
         return ResponseEntity.ok(employeeService.getAllAttendance());
     }
 
-    @GetMapping("/locations/active")
+    @GetMapping("/api/location/all")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<List<Attendance>> getActiveLocations() {
         return ResponseEntity.ok(employeeService.getActiveLocations());
+    }
+
+    @GetMapping("/attendance/location/{employeeId}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Attendance> getEmployeeLocation(@PathVariable(name = "employeeId") Long employeeId) {
+        return ResponseEntity.ok(employeeService.getActiveLocationByEmployeeId(employeeId));
     }
 }

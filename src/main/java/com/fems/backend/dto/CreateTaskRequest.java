@@ -8,4 +8,6 @@ public class CreateTaskRequest {
     private Long clientId;
     private String title;
     private String description;
+    private com.fems.backend.entity.VisitTaskStatus status;
+    private java.time.LocalDateTime startTime;
 }

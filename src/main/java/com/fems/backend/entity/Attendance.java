@@ -27,4 +27,6 @@ public class Attendance {
     
     private Double latitude;
     private Double longitude;
+    
+    private LocalDateTime lastLocationUpdatedAt;
 }
