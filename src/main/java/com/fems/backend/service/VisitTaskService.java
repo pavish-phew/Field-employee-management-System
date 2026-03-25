@@ -16,6 +16,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Map;
 import java.util.HashMap;
@@ -34,28 +35,59 @@ public class VisitTaskService {
     private final EmployeeLocationHistoryRepository employeeLocationHistoryRepository;
 
     @Transactional
-    public TaskResponse createVisitTask(CreateTaskRequest request) {
+    public List<TaskResponse> createVisitTask(CreateTaskRequest request) {
         Employee emp = employeeRepository.findById(request.getEmployeeId()).orElseThrow();
-        Client client = clientRepository.findById(request.getClientId()).orElseThrow();
 
-        // VALIDATE LIMITS
-        validateTaskLimits(emp, client);
+        // Resolve client IDs: prefer clientIds list, fall back to single clientId
+        List<Long> clientIds = new ArrayList<>();
+        if (request.getClientIds() != null && !request.getClientIds().isEmpty()) {
+            clientIds.addAll(request.getClientIds());
+        } else if (request.getClientId() != null) {
+            clientIds.add(request.getClientId());
+        } else {
+            throw new RuntimeException("At least one client must be selected");
+        }
 
-        VisitTask task = VisitTask.builder()
-                .employee(emp)
-                .client(client)
-                .title(request.getTitle())
-                .description(request.getDescription())
-                .status(request.getStatus() != null ? request.getStatus() : VisitTaskStatus.PENDING)
-                .startTime(request.getStartTime())
-                .build();
-        
-        task = visitTaskRepository.save(task);
-        return mapToResponse(task);
+        List<TaskResponse> responses = new ArrayList<>();
+        for (Long clientId : clientIds) {
+            Client client = clientRepository.findById(clientId).orElseThrow(
+                () -> new RuntimeException("Client not found: " + clientId));
+
+            // VALIDATE LIMITS
+            validateTaskLimits(emp, client);
+
+            VisitTask task = VisitTask.builder()
+                    .employee(emp)
+                    .client(client)
+                    .title(request.getTitle())
+                    .description(request.getDescription())
+                    .status(request.getStatus() != null ? request.getStatus() : VisitTaskStatus.PENDING)
+                    .startTime(request.getStartTime())
+                    .build();
+
+            task = visitTaskRepository.save(task);
+            responses.add(mapToResponse(task));
+        }
+        return responses;
     }
 
     public List<TaskResponse> getAllTasks() {
         return visitTaskRepository.findAll().stream().map(this::mapToResponse).collect(Collectors.toList());
+    }
+
+    public List<TaskResponse> getTodaysTasks() {
+        LocalDate today = LocalDate.now();
+        LocalDateTime start = today.atStartOfDay();
+        LocalDateTime end = today.plusDays(1).atStartOfDay();
+        return visitTaskRepository.findByCreatedAtBetween(start, end)
+                .stream().map(this::mapToResponse).collect(Collectors.toList());
+    }
+
+    public List<TaskResponse> getTasksByDate(LocalDate date) {
+        LocalDateTime start = date.atStartOfDay();
+        LocalDateTime end = date.plusDays(1).atStartOfDay();
+        return visitTaskRepository.findByCreatedAtBetween(start, end)
+                .stream().map(this::mapToResponse).collect(Collectors.toList());
     }
 
     @Transactional

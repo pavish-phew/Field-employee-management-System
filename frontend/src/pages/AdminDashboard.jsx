@@ -425,6 +425,17 @@ const AdminDashboard = () => {
   const [taskSummary, setTaskSummary] = useState([]);
   const [loading, setLoading] = useState(false);
 
+  // Task date filter state
+  const [taskDateFilter, setTaskDateFilter] = useState(new Date().toISOString().slice(0, 10)); // today
+  const [showAllTasks, setShowAllTasks] = useState(false);
+
+  // Client search
+  const [clientSearch, setClientSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
+  // Multi-client select state for Create Task
+  const [selectedClientIds, setSelectedClientIds] = useState([]);
+
   // Modals Visibility
   const [showEmployeeModal, setShowEmployeeModal] = useState(false);
   const [showClientModal, setShowClientModal] = useState(false);
@@ -440,6 +451,27 @@ const AdminDashboard = () => {
   
   const [showStatsModal, setShowStatsModal] = useState(false);
   const [employeeStats, setEmployeeStats] = useState([]);
+
+  // Debounce client search
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(clientSearch), 300);
+    return () => clearTimeout(timer);
+  }, [clientSearch]);
+
+  const filteredClients = useMemo(() => {
+    if (!debouncedSearch.trim()) return clients;
+    const q = debouncedSearch.toLowerCase();
+    return clients.filter(c =>
+      (c.user?.name || '').toLowerCase().includes(q) ||
+      (c.address || '').toLowerCase().includes(q)
+    );
+  }, [clients, debouncedSearch]);
+
+  const toggleClientSelection = (id) => {
+    setSelectedClientIds(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  };
   
   const mapRef = useRef(null);
   const initialFocusDone = useRef(false);
@@ -461,7 +493,7 @@ const AdminDashboard = () => {
       const [empRes, cliRes, taskRes, attRes, locRes, summaryRes] = await Promise.all([
         adminApi.getEmployees(),
         adminApi.getClients(),
-        adminApi.getAllTasks(),
+        showAllTasks ? adminApi.getAllTasks() : adminApi.getTasksByDate(taskDateFilter),
         attendanceApi.getAllHistory(),
         attendanceApi.getActiveLocations(),
         adminApi.getTaskSummary()
@@ -491,7 +523,7 @@ const AdminDashboard = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [taskDateFilter, showAllTasks]);
 
   const loadEmployeeHistory = useCallback(async (empId) => {
     if (!empId) {
@@ -669,11 +701,21 @@ const AdminDashboard = () => {
     e.preventDefault();
     const fd = new FormData(e.target);
     const data = Object.fromEntries(fd.entries());
-    if (!data.startTime) delete data.startTime; // Avoid sending empty string
+    if (!data.startTime) delete data.startTime;
+
+    // Attach multi-selected client IDs
+    if (selectedClientIds.length === 0) {
+      toast.error('Please select at least one client/site');
+      return;
+    }
+    data.clientIds = selectedClientIds;
+    delete data.clientId;
+
     try {
       await adminApi.createTask(data);
-      toast.success("Task created successfully");
+      toast.success(`${selectedClientIds.length} task(s) created successfully`);
       setShowTaskModal(false);
+      setSelectedClientIds([]);
       loadData();
     } catch (err) { 
       const msg = err.response?.data?.message || "Task Creation Failed";
@@ -746,9 +788,30 @@ const AdminDashboard = () => {
         
         <div className="flex items-center gap-3">
            {activeTab === 'dashboard' && (
-             <button onClick={() => setShowTaskModal(true)} className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-2xl font-bold flex items-center gap-2 shadow-lg shadow-indigo-600/20 active:scale-95 transition-all decoration-indigo-400 decoration-2 underline-offset-4">
-               <Plus size={18} /> Create Task
-             </button>
+             <>
+               {/* Date filter for tasks */}
+               <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-2xl px-4 py-2">
+                 <input
+                   type="date"
+                   value={taskDateFilter}
+                   onChange={e => { setTaskDateFilter(e.target.value); setShowAllTasks(false); }}
+                   className="bg-transparent text-slate-300 text-sm font-bold outline-none cursor-pointer"
+                 />
+               </div>
+               <button
+                 onClick={() => setShowAllTasks(p => !p)}
+                 className={`px-4 py-2 rounded-2xl font-bold text-xs uppercase tracking-widest transition-all border ${
+                   showAllTasks
+                     ? 'bg-indigo-600 border-indigo-500 text-white'
+                     : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+                 }`}
+               >
+                 {showAllTasks ? 'All Tasks' : 'Today'}
+               </button>
+               <button onClick={() => setShowTaskModal(true)} className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-2xl font-bold flex items-center gap-2 shadow-lg shadow-indigo-600/20 active:scale-95 transition-all">
+                 <Plus size={18} /> Create Task
+               </button>
+             </>
            )}
            {activeTab === 'team' && (
              <button onClick={() => setShowEmployeeModal(true)} className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-3 rounded-2xl font-bold flex items-center gap-2 shadow-lg shadow-emerald-600/20 active:scale-95 transition-all">
@@ -756,9 +819,28 @@ const AdminDashboard = () => {
              </button>
            )}
            {activeTab === 'sites' && (
-             <button onClick={() => setShowClientModal(true)} className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-2xl font-bold flex items-center gap-2 shadow-lg shadow-blue-600/20 active:scale-95 transition-all">
-               <MapPin size={18} /> Add Client
-             </button>
+             <div className="flex items-center gap-2">
+               <button
+                 onClick={async () => {
+                   try {
+                     const res = await adminApi.exportClientsExcel();
+                     const url = window.URL.createObjectURL(new Blob([res.data]));
+                     const a = document.createElement('a');
+                     a.href = url;
+                     a.download = 'fems_clients.xlsx';
+                     a.click();
+                     window.URL.revokeObjectURL(url);
+                     toast.success('Clients exported!');
+                   } catch { toast.error('Export failed'); }
+                 }}
+                 className="bg-emerald-700 hover:bg-emerald-600 text-white px-5 py-3 rounded-2xl font-bold flex items-center gap-2 shadow-lg active:scale-95 transition-all text-sm"
+               >
+                 ⬇ Export Excel
+               </button>
+               <button onClick={() => setShowClientModal(true)} className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-2xl font-bold flex items-center gap-2 shadow-lg shadow-blue-600/20 active:scale-95 transition-all">
+                 <MapPin size={18} /> Add Client
+               </button>
+             </div>
            )}
            <button onClick={loadData} className="p-3 bg-slate-900 border border-slate-800 rounded-2xl text-slate-400 hover:text-white transition-all"><History size={18} /></button>
         </div>
@@ -819,21 +901,39 @@ const AdminDashboard = () => {
 
         <AnimatePresence mode="wait">
           {activeTab === 'dashboard' && (
-             <motion.div key="dashboard" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-               {tasks.map(t => (
-                 <div key={t.id} className="relative group/task">
-                   <TaskCard task={t} />
-                   <button
-                     onClick={() => setEditingTask(t)}
-                     className="absolute top-4 right-4 opacity-0 group-hover/task:opacity-100 transition-all bg-indigo-600/90 hover:bg-indigo-500 text-white text-[10px] font-extrabold uppercase tracking-widest px-3 py-1.5 rounded-xl flex items-center gap-1.5 shadow-lg backdrop-blur-sm z-10"
-                   >
-                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                     Edit
-                   </button>
-                 </div>
-               ))}
-               {tasks.length === 0 && <p className="col-span-full py-40 text-center text-slate-600 font-bold uppercase tracking-widest text-xs">No active operations</p>}
-            </motion.div>
+             <motion.div key="dashboard" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-4">
+               {/* Subtle label */}
+               <p className="text-[10px] font-black uppercase tracking-widest text-slate-600">
+                 {showAllTasks ? `All Tasks (${tasks.length})` : `Tasks for ${new Date(taskDateFilter + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })} (${tasks.length})`}
+               </p>
+               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                 {tasks.map(t => (
+                   <div key={t.id} className="relative group/task">
+                     <TaskCard task={t} />
+                     <button
+                       onClick={() => setEditingTask(t)}
+                       className="absolute top-4 right-4 opacity-0 group-hover/task:opacity-100 transition-all bg-indigo-600/90 hover:bg-indigo-500 text-white text-[10px] font-extrabold uppercase tracking-widest px-3 py-1.5 rounded-xl flex items-center gap-1.5 shadow-lg backdrop-blur-sm z-10"
+                     >
+                       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                       Edit
+                     </button>
+                   </div>
+                 ))}
+                 {tasks.length === 0 && (
+                   <div className="col-span-full py-40 flex flex-col items-center gap-3">
+                     <div className="text-5xl opacity-20">📋</div>
+                     <p className="text-slate-600 font-bold uppercase tracking-widest text-xs">
+                       {showAllTasks ? 'No tasks found' : 'No tasks for today'}
+                     </p>
+                     {!showAllTasks && (
+                       <button onClick={() => setShowAllTasks(true)} className="text-indigo-500 text-xs font-bold hover:underline">
+                         View all tasks →
+                       </button>
+                     )}
+                   </div>
+                 )}
+               </div>
+             </motion.div>
           )}
 
           {activeTab === 'team' && (
@@ -854,22 +954,42 @@ const AdminDashboard = () => {
           )}
 
           {activeTab === 'sites' && (
-             <motion.div key="sites" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {clients.map(c => (
-                  <div key={c.id} className="glass-card p-6 rounded-[2rem] flex items-center justify-between group border border-slate-800">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 bg-emerald-500/10 rounded-xl flex items-center justify-center font-bold text-emerald-400">{c.user?.name?.[0]}</div>
-                      <div>
-                        <h4 className="font-bold text-white">{c.user?.name}</h4>
-                        <p className="text-[10px] text-slate-500 italic truncate max-w-[180px]">{c.address || `${parseFloat(c.latitude).toFixed(4)}, ${parseFloat(c.longitude).toFixed(4)}`}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <button onClick={() => setEditingClient(c)} className="p-2 text-slate-600 hover:text-indigo-400 opacity-0 group-hover:opacity-100 transition-all"><Plus size={16}/></button>
-                      <button onClick={async () => { if(confirm('Delete Site?')) { await adminApi.deleteClient(c.id); loadData(); } }} className="p-2 text-slate-600 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-all"><Trash2 size={16}/></button>
-                    </div>
-                  </div>
-                ))}
+             <motion.div key="sites" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
+               {/* Client Search Bar */}
+               <div className="relative max-w-sm">
+                 <Search size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
+                 <input
+                   type="text"
+                   placeholder="Search clients by name or address..."
+                   value={clientSearch}
+                   onChange={e => setClientSearch(e.target.value)}
+                   className="w-full pl-10 pr-4 py-3 bg-slate-900 border border-slate-800 rounded-2xl text-sm text-white placeholder-slate-600 outline-none focus:border-indigo-500 transition-colors"
+                 />
+               </div>
+               {/* Client Grid */}
+               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                 {filteredClients.map(c => (
+                   <div key={c.id} className="glass-card p-6 rounded-[2rem] flex items-center justify-between group border border-slate-800">
+                     <div className="flex items-center gap-4">
+                       <div className="w-12 h-12 bg-emerald-500/10 rounded-xl flex items-center justify-center font-bold text-emerald-400">{c.user?.name?.[0]}</div>
+                       <div>
+                         <h4 className="font-bold text-white">{c.user?.name}</h4>
+                         <p className="text-[10px] text-slate-500 italic truncate max-w-[180px]">{c.address || `${parseFloat(c.latitude).toFixed(4)}, ${parseFloat(c.longitude).toFixed(4)}`}</p>
+                       </div>
+                     </div>
+                     <div className="flex items-center gap-1">
+                       <button onClick={() => setEditingClient(c)} className="p-2 text-slate-600 hover:text-indigo-400 opacity-0 group-hover:opacity-100 transition-all"><Plus size={16}/></button>
+                       <button onClick={async () => { if(confirm('Delete Site?')) { await adminApi.deleteClient(c.id); loadData(); } }} className="p-2 text-slate-600 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-all"><Trash2 size={16}/></button>
+                     </div>
+                   </div>
+                 ))}
+                 {filteredClients.length === 0 && (
+                   <div className="col-span-full py-24 flex flex-col items-center gap-3">
+                     <div className="text-4xl opacity-20">🔍</div>
+                     <p className="text-slate-600 font-bold uppercase tracking-widest text-xs">No clients found for "{debouncedSearch}"</p>
+                   </div>
+                 )}
+               </div>
              </motion.div>
           )}
 
@@ -1058,7 +1178,7 @@ const AdminDashboard = () => {
         </form>
       </Modal>
 
-      <Modal title="Create Task" isOpen={showTaskModal} onClose={() => setShowTaskModal(false)}>
+      <Modal title="Create Task" isOpen={showTaskModal} onClose={() => { setShowTaskModal(false); setSelectedClientIds([]); }}>
         <form onSubmit={handleCreateTask} className="space-y-5">
            <div className="space-y-2">
               <label className="text-[10px] font-extrabold uppercase tracking-widest text-slate-500 ml-1">Task name</label>
@@ -1076,25 +1196,37 @@ const AdminDashboard = () => {
                 </select>
               </div>
               <div className="space-y-2">
-                <label className="text-[10px] font-extrabold uppercase tracking-widest text-slate-500 ml-1">Assign client/site</label>
-                <select name="clientId" required className="w-full input-premium rounded-2xl px-5 py-3.5 outline-none">
-                   {clients.map(c => <option key={c.id} value={c.id}>{c.user?.name}</option>)}
-                </select>
-              </div>
-           </div>
-           <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
                 <label className="text-[10px] font-extrabold uppercase tracking-widest text-slate-500 ml-1">Start time</label>
                 <input type="datetime-local" name="startTime" className="w-full input-premium rounded-2xl px-5 py-3.5 outline-none" />
               </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-extrabold uppercase tracking-widest text-slate-500 ml-1">Status</label>
-                <select name="status" className="w-full input-premium rounded-2xl px-5 py-3.5 outline-none">
-                   <option value="PENDING">Pending</option>
-                   <option value="IN_PROGRESS">In Progress</option>
-                   <option value="COMPLETED">Completed</option>
-                </select>
+           </div>
+           {/* Multi-client checkbox list */}
+           <div className="space-y-2">
+              <label className="text-[10px] font-extrabold uppercase tracking-widest text-slate-500 ml-1">
+                Assign client/site(s) — {selectedClientIds.length} selected
+              </label>
+              <div className="max-h-40 overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900/60 divide-y divide-slate-800">
+                {clients.map(c => (
+                  <label key={c.id} className="flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-slate-800/60 transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={selectedClientIds.includes(c.id)}
+                      onChange={() => toggleClientSelection(c.id)}
+                      className="w-4 h-4 accent-indigo-500 rounded"
+                    />
+                    <span className="text-sm font-semibold text-slate-200">{c.user?.name}</span>
+                    <span className="text-[10px] text-slate-500 truncate">{c.address}</span>
+                  </label>
+                ))}
               </div>
+           </div>
+           <div className="space-y-2">
+              <label className="text-[10px] font-extrabold uppercase tracking-widest text-slate-500 ml-1">Status</label>
+              <select name="status" className="w-full input-premium rounded-2xl px-5 py-3.5 outline-none">
+                 <option value="PENDING">Pending</option>
+                 <option value="IN_PROGRESS">In Progress</option>
+                 <option value="COMPLETED">Completed</option>
+              </select>
            </div>
            <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold py-4 rounded-2xl transition-all shadow-xl shadow-indigo-600/20 active:scale-95 mt-4">Create Task</button>
         </form>

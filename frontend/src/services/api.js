@@ -31,6 +31,8 @@ export const adminApi = {
   deleteClient: (id) => api.delete(`/admin/clients/${id}`),
 
   getAllTasks: () => api.get('/api/tasks'),
+  getTodaysTasks: () => api.get('/api/tasks/today'),
+  getTasksByDate: (date) => api.get(`/api/tasks/by-date?date=${date}`),
   createTask: (data) => api.post('/api/tasks', data),
   updateTask: (id, data) => api.put(`/api/tasks/${id}`, data),
   deleteTask: (id) => api.delete(`/api/tasks/${id}`),
@@ -45,6 +47,7 @@ export const adminApi = {
   },
   getTaskSummary: () => api.get('/api/tasks/admin/task-summary'),
   getEmployeeStats: () => api.get('/api/admin/employee-stats'),
+  exportClientsExcel: () => api.get('/admin/clients/export/excel', { responseType: 'blob' }),
 };
 
 // Attendance API

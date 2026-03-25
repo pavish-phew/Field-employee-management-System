@@ -14,6 +14,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @RestController
@@ -26,7 +27,7 @@ public class VisitTaskController {
     private final UserRepository userRepository;
 
     @PostMapping
-    public ResponseEntity<TaskResponse> createVisitTask(@RequestBody CreateTaskRequest request) {
+    public ResponseEntity<List<TaskResponse>> createVisitTask(@RequestBody CreateTaskRequest request) {
         return ResponseEntity.ok(visitTaskService.createVisitTask(request));
     }
 
@@ -36,9 +37,22 @@ public class VisitTaskController {
         return ResponseEntity.ok(visitTaskService.updateVisitTask(id, request));
     }
 
+    // Returns ALL tasks (no date filter) - used by reports/history
     @GetMapping
     public ResponseEntity<List<TaskResponse>> getAllTasks() {
         return ResponseEntity.ok(visitTaskService.getAllTasks());
+    }
+
+    // Returns ONLY today's tasks - used by Dashboard tab
+    @GetMapping("/today")
+    public ResponseEntity<List<TaskResponse>> getTodaysTasks() {
+        return ResponseEntity.ok(visitTaskService.getTodaysTasks());
+    }
+
+    // Returns tasks for a specific date (yyyy-MM-dd)
+    @GetMapping("/by-date")
+    public ResponseEntity<List<TaskResponse>> getTasksByDate(@RequestParam(name = "date") String date) {
+        return ResponseEntity.ok(visitTaskService.getTasksByDate(LocalDate.parse(date)));
     }
 
     @GetMapping("/me")
@@ -58,6 +72,13 @@ public class VisitTaskController {
     @GetMapping("/employee/{employeeId}")
     public ResponseEntity<List<TaskResponse>> getTasksByEmployee(@PathVariable(name = "employeeId") Long employeeId) {
         return ResponseEntity.ok(visitTaskService.getTasksByEmployee(employeeId));
+    }
+
+    @GetMapping("/employee/{employeeId}/active")
+    public ResponseEntity<List<TaskResponse>> getActiveTasksByEmployee(@PathVariable(name = "employeeId") Long employeeId) {
+        return ResponseEntity.ok(visitTaskService.getTasksByEmployee(employeeId).stream()
+            .filter(t -> t.getStatus() == VisitTaskStatus.IN_PROGRESS || t.getStatus() == VisitTaskStatus.PENDING)
+            .toList());
     }
 
     @GetMapping("/client/{clientId}")
