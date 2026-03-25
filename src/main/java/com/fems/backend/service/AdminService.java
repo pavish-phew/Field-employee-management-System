@@ -42,7 +42,8 @@ public class AdminService {
         user.setName(request.getName());
         user.setEmail(request.getEmail());
         user.setPassword(passwordEncoder.encode(request.getPassword()));
-        user.setRole(request.getRole() != null && !request.getRole().isEmpty() ? request.getRole().toUpperCase() : "EMPLOYEE");
+        user.setRole(request.getRole() != null && !request.getRole().isEmpty() ? request.getRole().toUpperCase()
+                : "EMPLOYEE");
         user.setPhone(request.getPhone());
         user = userRepository.save(user);
 
@@ -94,9 +95,10 @@ public class AdminService {
     public void updateClient(Long id, CreateClientRequest request) {
         Client client = clientRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Client not found"));
-        
+
         User user = client.getUser();
-        if (request.getName() != null) user.setName(request.getName());
+        if (request.getName() != null)
+            user.setName(request.getName());
         if (request.getEmail() != null && !user.getEmail().equals(request.getEmail())) {
             if (userRepository.existsByEmail(request.getEmail())) {
                 throw new RuntimeException("Email already exists");
@@ -108,33 +110,37 @@ public class AdminService {
         }
         userRepository.save(user);
 
-        if (request.getAddress() != null) client.setAddress(request.getAddress());
-        if (request.getLatitude() != null) client.setLatitude(request.getLatitude());
-        if (request.getLongitude() != null) client.setLongitude(request.getLongitude());
+        if (request.getAddress() != null)
+            client.setAddress(request.getAddress());
+        if (request.getLatitude() != null)
+            client.setLatitude(request.getLatitude());
+        if (request.getLongitude() != null)
+            client.setLongitude(request.getLongitude());
         clientRepository.save(client);
     }
 
     public List<EmployeeStatsResponse> getEmployeeStats() {
         List<Employee> employees = employeeRepository.findAll();
         List<VisitTask> allTasks = visitTaskRepository.findAll();
-        
+
         // Group tasks by employee ID
         Map<Long, List<VisitTask>> tasksByEmployee = allTasks.stream()
-            .filter(t -> t.getEmployee() != null)
-            .collect(Collectors.groupingBy(t -> t.getEmployee().getId()));
-            
+                .filter(t -> t.getEmployee() != null)
+                .collect(Collectors.groupingBy(t -> t.getEmployee().getId()));
+
         return employees.stream().map(emp -> {
             List<VisitTask> empTasks = tasksByEmployee.getOrDefault(emp.getId(), new ArrayList<>());
             long completed = empTasks.stream().filter(t -> t.getStatus() == VisitTaskStatus.COMPLETED).count();
-            long pending = empTasks.stream().filter(t -> t.getStatus() == VisitTaskStatus.PENDING || t.getStatus() == VisitTaskStatus.IN_PROGRESS).count();
-            
+            long pending = empTasks.stream().filter(
+                    t -> t.getStatus() == VisitTaskStatus.PENDING || t.getStatus() == VisitTaskStatus.IN_PROGRESS)
+                    .count();
+
             return EmployeeStatsResponse.builder()
-                .employeeName(emp.getUser() != null ? emp.getUser().getName() : "Unknown")
-                .completedTasks(completed)
-                .pendingTasks(pending)
-                .totalTasks(empTasks.size())
-                .build();
+                    .employeeName(emp.getUser() != null ? emp.getUser().getName() : "Unknown")
+                    .completedTasks(completed)
+                    .pendingTasks(pending)
+                    .totalTasks(empTasks.size())
+                    .build();
         }).collect(Collectors.toList());
     }
 }
-

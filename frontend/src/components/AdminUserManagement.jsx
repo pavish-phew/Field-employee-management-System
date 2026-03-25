@@ -28,16 +28,41 @@ const AdminUserManagement = () => {
         e.preventDefault();
         try {
             if (type === 'EMPLOYEE') {
-                await adminApi.createEmployee(formData);
+                await adminApi.createEmployee({
+                    name: formData.name?.trim(),
+                    email: formData.email?.trim(),
+                    password: formData.password,
+                    phone: formData.phone?.trim(),
+                    role: 'EMPLOYEE'
+                });
                 alert("Employee created!");
             } else {
-                await adminApi.createClient(formData);
-                alert("Client created!");
+                const lat = parseFloat(formData.latitude);
+                const lon = parseFloat(formData.longitude);
+                
+                if (!formData.name || !formData.address || isNaN(lat) || isNaN(lon)) {
+                    alert("All required fields must be filled and coordinates must be valid numbers");
+                    return;
+                }
+
+                const payload = {
+                    name: formData.name.trim(),
+                    address: formData.address.trim(),
+                    latitude: lat,
+                    longitude: lon,
+                    email: formData.email?.trim() || null,
+                    password: formData.password
+                };
+
+                console.log("📤 Sending client:", payload);
+                await adminApi.createClient(payload);
+                alert("Client created successfully");
             }
             fetchData();
             setFormData({ name: '', email: '', password: '', phone: '', address: '', latitude: 0, longitude: 0 });
-        } catch (err) {
-            alert("Create failed: " + (err.response?.data || err.message));
+        } catch (error) {
+            console.error("❌ Add client failed:", error.response?.data || error.message);
+            alert("Create failed: " + (typeof error.response?.data === 'string' ? error.response.data : error.message));
         }
     };
 

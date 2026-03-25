@@ -585,30 +585,70 @@ const AdminDashboard = () => {
   const handleCreateClient = async (e) => {
     e.preventDefault();
     const fd = new FormData(e.target);
-    const data = Object.fromEntries(fd.entries());
+    const rawData = Object.fromEntries(fd.entries());
+
+    const lat = parseFloat(rawData.latitude);
+    const lon = parseFloat(rawData.longitude);
+
+    if (isNaN(lat) || isNaN(lon)) {
+        toast.error("Latitude and Longitude must be valid numbers");
+        return;
+    }
+
+    const payload = {
+        name: rawData.name?.trim(),
+        address: rawData.address?.trim(),
+        latitude: lat,
+        longitude: lon,
+        email: rawData.email?.trim() || null,
+        password: rawData.password || undefined
+    };
+
     try {
-      await adminApi.createClient(data);
+      await adminApi.createClient(payload);
       toast.success("Client added successfully");
       setShowClientModal(false);
       loadData();
     } catch (err) { 
-      const msg = err.response?.data?.message || "Creation Failed";
-      toast.error(msg); 
+      const msg = err.response?.data?.message || err.response?.data || "Creation Failed";
+      toast.error(typeof msg === 'string' ? msg : "Creation Failed"); 
     }
   };
 
   const handleUpdateClient = async (e) => {
     e.preventDefault();
     const fd = new FormData(e.target);
-    const data = Object.fromEntries(fd.entries());
+    const rawData = Object.fromEntries(fd.entries());
+    
+    const lat = parseFloat(rawData.latitude);
+    const lon = parseFloat(rawData.longitude);
+
+    if (isNaN(lat) || isNaN(lon)) {
+        toast.error("Latitude and Longitude must be valid numbers");
+        return;
+    }
+
+    const payload = {
+        name: rawData.name?.trim(),
+        address: rawData.address?.trim(),
+        latitude: lat,
+        longitude: lon,
+        email: rawData.email?.trim() || null,
+    };
+    
+    if (rawData.password && rawData.password.trim() !== '') {
+        payload.password = rawData.password.trim();
+    }
+
     try {
-      await adminApi.updateClient(editingClient.id, data);
+      await adminApi.updateClient(editingClient.id, payload);
       toast.success("Client updated successfully");
       setEditingClient(null);
       loadData();
     } catch (err) { 
-      const msg = err.response?.data?.message || "Update Failed";
-      toast.error(msg); 
+      console.error("❌ Update failed details:", err.response?.data);
+      const msg = err.response?.data?.message || err.response?.data || "Update Failed";
+      toast.error(typeof msg === 'string' ? msg : JSON.stringify(msg)); 
     }
   };
 
@@ -837,8 +877,8 @@ const AdminDashboard = () => {
              <motion.div key="records" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-8">
                 <div className="flex items-center justify-between px-2">
                    <div>
-                      <h2 className="text-3xl font-extrabold text-white tracking-tighter uppercase">Audit Trail</h2>
-                      <p className="text-slate-500 font-bold text-[10px] uppercase tracking-widest mt-1">Hierarchical Task Completion Summary</p>
+                      <h2 className="text-3xl font-extrabold text-white tracking-tighter uppercase"></h2>
+                      <p className="text-slate-500 font-bold text-[10px] uppercase tracking-widest mt-1"></p>
                    </div>
                    <div className="flex items-center gap-4">
                       <button 
