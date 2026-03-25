@@ -861,7 +861,7 @@ const AdminDashboard = () => {
                       <div className="w-12 h-12 bg-emerald-500/10 rounded-xl flex items-center justify-center font-bold text-emerald-400">{c.user?.name?.[0]}</div>
                       <div>
                         <h4 className="font-bold text-white">{c.user?.name}</h4>
-                        <p className="text-[10px] text-slate-500 italic"><LocationLabel lat={c.latitude} lon={c.longitude}/></p>
+                        <p className="text-[10px] text-slate-500 italic truncate max-w-[180px]">{c.address || `${parseFloat(c.latitude).toFixed(4)}, ${parseFloat(c.longitude).toFixed(4)}`}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-1">

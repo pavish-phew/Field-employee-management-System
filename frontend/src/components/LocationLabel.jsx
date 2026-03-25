@@ -1,11 +1,67 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 
-// Global cache to avoid repeated Nominatim calls across re-renders/components
+// Global cache and queue for Nominatim to prevent 429 Too Many Requests
 const locationCache = {};
+const pendingQueue = [];
+let isProcessingQueue = false;
+
+const processQueue = async () => {
+  if (isProcessingQueue || pendingQueue.length === 0) return;
+  isProcessingQueue = true;
+
+  while (pendingQueue.length > 0) {
+    const { lat, lon, cacheKey, callback } = pendingQueue.shift();
+
+    if (locationCache[cacheKey]) {
+      callback(locationCache[cacheKey]);
+      continue;
+    }
+
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&zoom=16`,
+        { headers: { 'Accept-Language': 'en' } }
+      );
+
+      if (!res.ok) {
+        if (res.status === 429) {
+          // Re-queue the failed request
+          pendingQueue.unshift({ lat, lon, cacheKey, callback });
+          // Wait longer (3s) on rate limit before resuming
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          continue;
+        }
+        throw new Error(`OSM Error ${res.status}`);
+      }
+
+      const data = await res.json();
+      const addr = data.address || {};
+      
+      const area = addr.suburb || addr.neighbourhood || addr.road || addr.village || addr.town || "";
+      const city = addr.city || addr.state_district || addr.county || "Location";
+      
+      const result = area && city ? `${area}, ${city}` : (area || city || "Unknown Location");
+      
+      locationCache[cacheKey] = result;
+      callback(result);
+    } catch (e) {
+      console.warn("Geocode limit/error:", e.message);
+      // Optional: Store a fallback so we don't keep retrying failed coords
+      locationCache[cacheKey] = null; 
+      callback(null);
+    }
+
+    // Wait exactly 1100ms to stay safely under the 1 req/sec Nominatim limit
+    if (pendingQueue.length > 0) {
+      await new Promise(resolve => setTimeout(resolve, 1100));
+    }
+  }
+
+  isProcessingQueue = false;
+};
 
 const LocationLabel = ({ lat, lon, className = "" }) => {
   const [address, setAddress] = useState("");
-  const fetchInProgress = useRef(false);
 
   // Normalize coordinates for efficient caching (3 decimal places ~= 110m precision)
   const normalizedLat = lat ? parseFloat(lat).toFixed(3) : null;
@@ -15,45 +71,28 @@ const LocationLabel = ({ lat, lon, className = "" }) => {
   useEffect(() => {
     if (!normalizedLat || !normalizedLon) return;
 
-    // 1. Check Cache immediately
     if (locationCache[cacheKey]) {
       setAddress(locationCache[cacheKey]);
       return;
     }
 
-    // 3. Prevent redundant fetches
-    if (fetchInProgress.current) return;
-
-    const fetchLocation = async () => {
-      fetchInProgress.current = true;
-      try {
-        const res = await fetch(
-          `https://nominatim.openstreetmap.org/reverse?lat=${normalizedLat}&lon=${normalizedLon}&format=json&zoom=16`
-        );
-        
-        if (!res.ok) throw new Error("OSM Limit");
-        
-        const data = await res.json();
-        const addr = data.address || {};
-        
-        // Extract meaningful area names: Suburb/Neighbourhood -> Road -> Village/Town
-        const area = addr.suburb || addr.neighbourhood || addr.suburb || addr.road || addr.village || addr.town || "";
-        const city = addr.city || addr.state_district || addr.county || "Puducherry";
-        
-        const result = area && city ? `${area}, ${city}` : (area || city || "Nearby");
-        
-        // Store in global cache
-        locationCache[cacheKey] = result;
-        setAddress(result);
-      } catch (e) {
-        // Silent failure - we'll just keep showing coordinates as fallback
-        console.warn("Geocode standby:", e.message);
-      } finally {
-        fetchInProgress.current = false;
+    // Enqueue this component's request safely
+    let isMounted = true;
+    
+    pendingQueue.push({
+      lat: normalizedLat,
+      lon: normalizedLon,
+      cacheKey,
+      callback: (res) => {
+        if (isMounted && res) setAddress(res);
       }
-    };
+    });
+    
+    processQueue();
 
-    fetchLocation();
+    return () => {
+      isMounted = false;
+    };
   }, [normalizedLat, normalizedLon, cacheKey]);
 
   // Display raw coordinates if address isn't ready
